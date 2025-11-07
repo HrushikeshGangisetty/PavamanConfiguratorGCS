@@ -34,7 +34,8 @@ class TelemetryRepository {
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private var connectionProvider: MavConnectionProvider? = null
-    private var connection: CoroutinesMavConnection? = null
+    var connection: CoroutinesMavConnection? = null
+        private set
     lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
         private set
 

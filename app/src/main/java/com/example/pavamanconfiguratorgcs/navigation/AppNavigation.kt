@@ -11,6 +11,8 @@ import com.example.pavamanconfiguratorgcs.PavamanApplication
 import com.example.pavamanconfiguratorgcs.ui.SharedViewModel
 import com.example.pavamanconfiguratorgcs.ui.ViewModelFactory
 import com.example.pavamanconfiguratorgcs.ui.configurations.ConfigurationsScreen
+import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationScreen
+import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationViewModel
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionScreen
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionViewModel
 import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
@@ -23,6 +25,7 @@ sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Configurations : Screen("configurations")
     object FullParams : Screen("full_params")
+    object EscCalibration : Screen("esc_calibration")
 }
 
 @Composable
@@ -94,6 +97,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             ConfigurationsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
+                },
+                onNavigateToEscCalibration = {
+                    navController.navigate(Screen.EscCalibration.route)
                 }
             )
         }
@@ -112,6 +118,26 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             ParametersScreen(
                 viewModel = parametersViewModel,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.EscCalibration.route) {
+            // Create EscCalibrationViewModel with dependencies
+            val escCalibrationViewModel: EscCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return EscCalibrationViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            EscCalibrationScreen(
+                viewModel = escCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
             )
         }
     }
