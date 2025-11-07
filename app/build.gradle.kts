@@ -75,4 +75,7 @@ dependencies {
 
     // Coroutines adapter (recommended for Android)
     implementation("com.divpundir.mavlink:adapter-coroutines:1.2.8")
+
+    // Material Icons Extended (for additional icons)
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
 }

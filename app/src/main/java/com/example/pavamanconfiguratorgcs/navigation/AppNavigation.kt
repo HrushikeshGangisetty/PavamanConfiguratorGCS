@@ -13,7 +13,8 @@ import com.example.pavamanconfiguratorgcs.ui.ViewModelFactory
 import com.example.pavamanconfiguratorgcs.ui.configurations.ConfigurationsScreen
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionScreen
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionViewModel
-import com.example.pavamanconfiguratorgcs.ui.fullparams.FullParamsScreen
+import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
+import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
 
@@ -98,10 +99,19 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         composable(Screen.FullParams.route) {
-            FullParamsScreen(
-                onNavigateBack = {
-                    navController.popBackStack()
+            // Create ParametersViewModel with the shared TelemetryRepository
+            val parametersViewModel: ParametersViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return ParametersViewModel(telemetryRepository) as T
+                    }
                 }
+            )
+
+            ParametersScreen(
+                viewModel = parametersViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }
