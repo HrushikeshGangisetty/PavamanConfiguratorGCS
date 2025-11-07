@@ -17,9 +17,11 @@ data class Parameter(
     val minValue: Float? = null,
     val maxValue: Float? = null,
     val defaultValue: Float? = null, // Factory default from ArduPilot
+    val displayName: String = name,    // Human-readable name
     val originalValue: Float = value, // Value when first loaded from FC
     val isDirty: Boolean = false,
-    val isReadOnly: Boolean = false
+    val isReadOnly: Boolean = false,
+    val rebootRequired: Boolean = false  // Reboot required after change
 ) {
 
     /**
@@ -135,6 +137,35 @@ data class Parameter(
             MavParamType.REAL32.value -> "Float"
             else -> "Unknown"
         }
+    }
+
+    /**
+     * Get detailed info for display
+     */
+    fun getDetailedInfo(): String {
+        val parts = mutableListOf<String>()
+
+        if (description.isNotEmpty()) {
+            parts.add(description)
+        }
+
+        if (units.isNotEmpty()) {
+            parts.add("Units: $units")
+        }
+
+        if (minValue != null || maxValue != null) {
+            parts.add("Range: ${minValue ?: "∞"} - ${maxValue ?: "∞"}")
+        }
+
+        if (defaultValue != null) {
+            parts.add("Default: $defaultValue")
+        }
+
+        if (rebootRequired) {
+            parts.add("⚠️ Reboot required after change")
+        }
+
+        return parts.joinToString("\n")
     }
 }
 

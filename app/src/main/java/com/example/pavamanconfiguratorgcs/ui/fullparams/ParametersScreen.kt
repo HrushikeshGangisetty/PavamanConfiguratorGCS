@@ -120,9 +120,8 @@ fun ParametersScreen(
                 ) {
                     Text("Name", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.25f))
                     Text("Value", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.15f))
-                    Text("Default", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.15f))
-                    Text("Units", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.1f))
-                    Text("Description", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.3f))
+                    Text("Units", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.15f))
+                    Text("Description", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(0.4f))
                     Spacer(modifier = Modifier.width(40.dp)) // For action buttons
                 }
             }

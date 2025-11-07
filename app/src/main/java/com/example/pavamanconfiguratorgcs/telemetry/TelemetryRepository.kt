@@ -250,11 +250,4 @@ class TelemetryRepository {
         lastFcuHeartbeatTime.set(0L)
         Log.d(TAG, "Disconnected")
     }
-
-    /**
-     * Expose underlying MAVLink connection for other components (nullable)
-     */
-    fun getConnection(): CoroutinesMavConnection? {
-        return connection
-    }
 }

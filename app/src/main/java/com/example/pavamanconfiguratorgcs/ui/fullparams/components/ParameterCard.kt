@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.pavamanconfiguratorgcs.data.models.Parameter
+import java.util.Locale
 
 @Composable
 fun ParameterCard(
@@ -66,7 +67,20 @@ fun ParameterCard(
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Column {
-                        Text(text = parameter.name, style = MaterialTheme.typography.titleMedium, fontWeight = if (parameter.isDirty) FontWeight.Bold else FontWeight.Normal)
+                        // Display human-readable name if available
+                        Text(
+                            text = parameter.displayName.ifEmpty { parameter.name },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = if (parameter.isDirty) FontWeight.Bold else FontWeight.Normal
+                        )
+                        // Show parameter name as subtitle if display name is different
+                        if (parameter.displayName.isNotEmpty() && parameter.displayName != parameter.name) {
+                            Text(
+                                text = parameter.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
                         if (parameter.group != "Other") {
                             Text(text = "Group: ${parameter.group}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -147,17 +161,59 @@ fun ParameterCard(
                 Column(modifier = Modifier.padding(top = 12.dp)) {
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(12.dp))
+
+                    // Description first if available
+                    if (parameter.description.isNotEmpty()) {
+                        Text(
+                            text = parameter.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     DetailRow("Type", parameter.getTypeName())
                     DetailRow("Index", parameter.index.toString())
+
                     if (parameter.minValue != null || parameter.maxValue != null) {
-                        DetailRow("Range", "${parameter.minValue ?: "∞"} to ${parameter.maxValue ?: "∞"}")
+                        DetailRow(
+                            "Range",
+                            "${parameter.minValue?.let { String.format("%.2f", it) } ?: "∞"} to ${parameter.maxValue?.let { String.format("%.2f", it) } ?: "∞"}"
+                        )
                     }
+
                     if (parameter.isDirty) {
-                        DetailRow("Original Value", parameter.originalValue.toString(), valueColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                        DetailRow(
+                            "Original",
+                            parameter.originalValue.toString(),
+                            valueColor = MaterialTheme.colorScheme.tertiary
+                        )
                     }
-                    if (parameter.description.isNotEmpty()) {
+
+                    // Show reboot warning if required
+                    if (parameter.rebootRequired) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = parameter.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                                    shape = MaterialTheme.shapes.small
+                                )
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "⚠️", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Reboot required after change",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }

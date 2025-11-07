@@ -55,12 +55,7 @@ class ParameterRepository(
         startListening()
 
         // Load parameter metadata in background
-        scope.launch {
-            // Try to detect vehicle type or default to copter
-            val vehicleType = detectVehicleType() ?: "copter"
-            Log.i(TAG, "Loading parameter metadata for vehicle type: $vehicleType")
-            metadataProvider.loadMetadata(vehicleType)
-        }
+        // DON'T start here - wait until parameters are actually requested
     }
 
     /**
@@ -84,6 +79,9 @@ class ParameterRepository(
     suspend fun requestAllParameters(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "📋 Requesting all parameters...")
+
+            // **CRITICAL**: Load metadata FIRST before requesting parameters
+            ensureMetadataLoaded()
 
             // Reset state
             receivedIndices.clear()
@@ -121,6 +119,58 @@ class ParameterRepository(
     }
 
     /**
+     * Ensure metadata is loaded before processing parameters
+     */
+    private suspend fun ensureMetadataLoaded() {
+        try {
+            if (metadataProvider.isMetadataLoaded()) {
+                Log.i(TAG, "✅ Metadata already loaded")
+                return
+            }
+
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.i(TAG, "🔄 STARTING METADATA LOAD PROCESS")
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+            val vehicleType = detectVehicleType() ?: "copter"
+            Log.i(TAG, "Vehicle type detected: $vehicleType")
+
+            val result = metadataProvider.loadMetadata(vehicleType)
+            result.fold(
+                onSuccess = {
+                    Log.i(TAG, "✅ Metadata loaded successfully")
+
+                    // Verify metadata is actually there
+                    val testParams = listOf("WPNAV_SPEED", "BATT_CAPACITY", "ANGLE_MAX", "RTL_ALT", "SYSID_THISMAV")
+                    testParams.forEach { paramName ->
+                        val meta = metadataProvider.getMetadata(paramName)
+                        Log.i(TAG, "  Test '$paramName': displayName='${meta.displayName}', units='${meta.units}', default=${meta.defaultValue}")
+                    }
+
+                    Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.e(TAG, "❌❌❌ METADATA LOAD FAILED ❌❌❌")
+                    Log.e(TAG, "Error type: ${error.javaClass.simpleName}")
+                    Log.e(TAG, "Error message: ${error.message}")
+                    Log.e(TAG, "Stack trace:")
+                    error.printStackTrace()
+                    Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.w(TAG, "⚠️ Continuing without metadata - parameters will have no descriptions")
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.e(TAG, "❌❌❌ EXCEPTION IN ensureMetadataLoaded ❌❌❌")
+            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Message: ${e.message}")
+            e.printStackTrace()
+            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        }
+    }
+
+    /**
      * Handle incoming PARAM_VALUE message from flight controller
      */
     private fun handleParamValue(paramValue: ParamValue) {
@@ -143,9 +193,20 @@ class ParameterRepository(
             // Get metadata for this parameter
             val metadata = metadataProvider.getMetadata(paramName)
 
-            // Log metadata enrichment for first few parameters
-            if (receivedIndices.size < 3) {
-                Log.d(TAG, "Enriching $paramName: units='${metadata.units}', desc='${metadata.description.take(50)}', default='${metadata.defaultValue}'")
+            // Log metadata enrichment for first few parameters to verify data is coming through
+            if (receivedIndices.size < 5) {
+                val descPreview = if (metadata.description.length > 50) {
+                    metadata.description.take(50) + "..."
+                } else {
+                    metadata.description
+                }
+                Log.i(TAG, "📝 Parameter #${receivedIndices.size + 1}: $paramName")
+                Log.i(TAG, "   Display Name: '${metadata.displayName}'")
+                Log.i(TAG, "   Units: '${metadata.units}'")
+                Log.i(TAG, "   Description: '$descPreview'")
+                Log.i(TAG, "   Default: ${metadata.defaultValue}")
+                Log.i(TAG, "   Range: ${metadata.minValue} - ${metadata.maxValue}")
+                Log.i(TAG, "   Reboot Required: ${metadata.rebootRequired}")
             }
 
             // Create parameter object with metadata
@@ -155,11 +216,13 @@ class ParameterRepository(
                 type = paramValue.paramType,
                 index = paramValue.paramIndex,
                 originalValue = paramValue.paramValue,
+                displayName = metadata.displayName.ifEmpty { paramName },
                 description = metadata.description,
                 units = metadata.units,
                 minValue = metadata.minValue,
                 maxValue = metadata.maxValue,
-                defaultValue = metadata.defaultValue // Add factory default from ArduPilot
+                defaultValue = metadata.defaultValue,
+                rebootRequired = metadata.rebootRequired
             )
 
             // Add to collection

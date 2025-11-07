@@ -80,9 +80,7 @@ class ParametersViewModel(
     }
 
     private fun initializeParameterRepository() {
-        val connection = runCatching {
-            telemetryRepository.getConnection()
-        }.getOrNull()
+        val connection = telemetryRepository.connection
 
         if (connection != null) {
             parameterRepository = ParameterRepository(connection, viewModelScope)

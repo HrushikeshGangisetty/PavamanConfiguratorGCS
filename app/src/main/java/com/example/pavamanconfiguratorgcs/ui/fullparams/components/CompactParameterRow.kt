@@ -35,12 +35,21 @@ fun CompactParameterRow(
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editValue by remember { mutableStateOf(parameter.getValueAsString()) }
+    var showDescriptionDialog by remember { mutableStateOf(false) }
 
     // Debug logging for first few parameters
     LaunchedEffect(parameter.name) {
-        if (parameter.index.toInt() < 3) {
-            android.util.Log.d("CompactParameterRow",
-                "Parameter ${parameter.name}: units='${parameter.units}', desc='${parameter.description.take(50)}'")
+        if (parameter.index.toInt() < 5) {
+            android.util.Log.i("CompactParameterRow", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            android.util.Log.i("CompactParameterRow", "Parameter: ${parameter.name}")
+            android.util.Log.i("CompactParameterRow", "Display Name: '${parameter.displayName}'")
+            android.util.Log.i("CompactParameterRow", "Value: ${parameter.value}")
+            android.util.Log.i("CompactParameterRow", "Units: '${parameter.units}'")
+            android.util.Log.i("CompactParameterRow", "Default: ${parameter.defaultValue}")
+            android.util.Log.i("CompactParameterRow", "Description: '${parameter.description.take(80)}'")
+            android.util.Log.i("CompactParameterRow", "Min: ${parameter.minValue}, Max: ${parameter.maxValue}")
+            android.util.Log.i("CompactParameterRow", "Reboot Required: ${parameter.rebootRequired}")
+            android.util.Log.i("CompactParameterRow", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         }
     }
 
@@ -48,6 +57,68 @@ fun CompactParameterRow(
         if (!isEditing) {
             editValue = parameter.getValueAsString()
         }
+    }
+
+    // Description Dialog
+    if (showDescriptionDialog) {
+        AlertDialog(
+            onDismissRequest = { showDescriptionDialog = false },
+            title = {
+                Column {
+                    Text(
+                        text = parameter.displayName.ifEmpty { parameter.name },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (parameter.displayName.isNotEmpty() && parameter.displayName != parameter.name) {
+                        Text(
+                            text = parameter.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (parameter.description.isNotEmpty()) {
+                        Text(
+                            text = parameter.description,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        Text(
+                            text = "No description available for this parameter.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Additional info
+                    if (parameter.units.isNotEmpty()) {
+                        Text(
+                            text = "Units: ${parameter.units}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (parameter.minValue != null || parameter.maxValue != null) {
+                        Text(
+                            text = "Range: ${parameter.minValue ?: "∞"} to ${parameter.maxValue ?: "∞"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDescriptionDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 
     Surface(
@@ -67,7 +138,7 @@ fun CompactParameterRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Name column
+            // Name column (without info icon)
             Text(
                 text = parameter.name,
                 fontSize = 11.sp,
@@ -127,43 +198,42 @@ fun CompactParameterRow(
                 }
             }
 
-            // Default column
+            // Units column
             Text(
-                text = parameter.defaultValue?.let {
-                    when (parameter.type.value) {
-                        com.divpundir.mavlink.definitions.common.MavParamType.UINT8.value,
-                        com.divpundir.mavlink.definitions.common.MavParamType.INT8.value,
-                        com.divpundir.mavlink.definitions.common.MavParamType.UINT16.value,
-                        com.divpundir.mavlink.definitions.common.MavParamType.INT16.value,
-                        com.divpundir.mavlink.definitions.common.MavParamType.UINT32.value,
-                        com.divpundir.mavlink.definitions.common.MavParamType.INT32.value -> it.toInt().toString()
-                        else -> String.format(java.util.Locale.US, "%.4f", it).trimEnd('0').trimEnd('.')
-                    }
-                } ?: "-",
+                text = parameter.units.ifEmpty { "-" },
                 fontSize = 11.sp,
                 color = Color(0xFF999999),
                 modifier = Modifier.weight(0.15f),
                 maxLines = 1
             )
 
-            // Units column
-            Text(
-                text = parameter.units.ifEmpty { "-" },
-                fontSize = 11.sp,
-                color = Color(0xFF999999),
-                modifier = Modifier.weight(0.1f),
-                maxLines = 1
-            )
+            // Description column with info icon
+            Row(
+                modifier = Modifier.weight(0.4f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = parameter.description.ifEmpty { "No description" },
+                    fontSize = 11.sp,
+                    color = Color(0xFF999999),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-            // Description column
-            Text(
-                text = parameter.description.ifEmpty { "No description" },
-                fontSize = 11.sp,
-                color = Color(0xFF999999),
-                modifier = Modifier.weight(0.3f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+                // Info icon in description column
+                IconButton(
+                    onClick = { showDescriptionDialog = true },
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Show description",
+                        tint = Color(0xFF64B5F6),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
 
             // Action buttons
             Row(
