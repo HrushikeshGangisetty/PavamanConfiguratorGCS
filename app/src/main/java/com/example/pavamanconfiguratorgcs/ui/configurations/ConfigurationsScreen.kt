@@ -24,6 +24,7 @@ fun ConfigurationsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
+    onNavigateToFlightModes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -78,6 +79,7 @@ fun ConfigurationsScreen(
                             when (item.route) {
                                 "esc_calibration" -> onNavigateToEscCalibration()
                                 "frame_type" -> onNavigateToFrameType()
+                                "flight_modes" -> onNavigateToFlightModes()
                                 // Handle other routes here
                             }
                         }
@@ -133,7 +135,8 @@ data class ConfigurationItem(
 fun getConfigurationItems(): List<ConfigurationItem> {
     return listOf(
         ConfigurationItem("ESC Calibration", "esc_calibration"),
-        ConfigurationItem("Frame Type", "frame_type")
+        ConfigurationItem("Frame Type", "frame_type"),
+        ConfigurationItem("Flight Modes", "flight_modes")
         // Add more items here as needed
     )
 }

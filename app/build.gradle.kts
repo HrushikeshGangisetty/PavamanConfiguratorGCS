@@ -75,4 +75,16 @@ dependencies {
 
     // Coroutines adapter (recommended for Android)
     implementation("com.divpundir.mavlink:adapter-coroutines:1.2.8")
+
+    // Material Icons Extended (for additional icons)
+    implementation("androidx.compose.material:material-icons-extended:1.7.5")
+
+    // Parameter metadata fetching
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-simplexml:2.9.0")
+    implementation("org.simpleframework:simple-xml:2.7.1") {
+        exclude(group = "stax", module = "stax-api")
+        exclude(group = "xpp3", module = "xpp3")
+    }
 }

@@ -13,9 +13,12 @@ import com.example.pavamanconfiguratorgcs.ui.ViewModelFactory
 import com.example.pavamanconfiguratorgcs.ui.configurations.ConfigurationsScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationViewModel
+import com.example.pavamanconfiguratorgcs.ui.configurations.FlightModesScreen
+import com.example.pavamanconfiguratorgcs.ui.configurations.FlightModesViewModel
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionScreen
 import com.example.pavamanconfiguratorgcs.ui.connection.ConnectionViewModel
-import com.example.pavamanconfiguratorgcs.ui.fullparams.FullParamsScreen
+import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
+import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
 
@@ -26,6 +29,7 @@ sealed class Screen(val route: String) {
     object FullParams : Screen("full_params")
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
+    object FlightModes : Screen("flight_modes")
 }
 
 @Composable
@@ -103,15 +107,27 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToFrameType = {
                     navController.navigate(Screen.FrameType.route)
+                },
+                onNavigateToFlightModes = {
+                    navController.navigate(Screen.FlightModes.route)
                 }
             )
         }
 
         composable(Screen.FullParams.route) {
-            FullParamsScreen(
-                onNavigateBack = {
-                    navController.popBackStack()
+            // Create ParametersViewModel with the shared TelemetryRepository
+            val parametersViewModel: ParametersViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return ParametersViewModel(telemetryRepository) as T
+                    }
                 }
+            )
+
+            ParametersScreen(
+                viewModel = parametersViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -150,6 +166,26 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             // Use fully-qualified composable reference
             com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeScreen(
                 viewModel = frameTypeViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.FlightModes.route) {
+            // Create FlightModesViewModel with dependencies
+            val flightModesViewModel: FlightModesViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return FlightModesViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            FlightModesScreen(
+                viewModel = flightModesViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
