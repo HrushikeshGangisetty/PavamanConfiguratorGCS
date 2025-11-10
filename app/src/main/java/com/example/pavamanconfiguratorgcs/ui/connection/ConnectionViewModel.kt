@@ -15,13 +15,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import com.example.pavamanconfiguratorgcs.telemetry.connections.BluetoothConnectionProvider
 import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpConnectionProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class ConnectionViewModel(
-    private val context: Context,
+    context: Context,
     private val telemetryRepository: TelemetryRepository
 ) : ViewModel() {
 
@@ -29,7 +30,9 @@ class ConnectionViewModel(
         private const val TAG = "ConnectionViewModel"
     }
 
-    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?
+    // Store only the application context to avoid leaking an Activity context
+    private val appContext: Context = context.applicationContext
+    private val bluetoothManager: BluetoothManager? = appContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
 
     private val _connectionType = MutableStateFlow(ConnectionType.TCP)
@@ -48,6 +51,7 @@ class ConnectionViewModel(
     val selectedDevice: StateFlow<PairedDevice?> = _selectedDevice.asStateFlow()
 
     val connectionState = telemetryRepository.connectionState
+    @Suppress("unused") // kept for potential UI binding
     val droneHeartbeatReceived = telemetryRepository.droneHeartbeatReceived
 
     private var bluetoothDeviceMap = mutableMapOf<String, BluetoothDevice>()
@@ -92,7 +96,7 @@ class ConnectionViewModel(
     }
 
     fun connect() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 when (_connectionType.value) {
                     ConnectionType.TCP -> {
@@ -142,16 +146,16 @@ class ConnectionViewModel(
     private fun hasBluetoothPermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(
-                context,
+                appContext,
                 Manifest.permission.BLUETOOTH_CONNECT
             ) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(
-                context,
+                appContext,
                 Manifest.permission.BLUETOOTH_SCAN
             ) == PackageManager.PERMISSION_GRANTED
         } else {
             ContextCompat.checkSelfPermission(
-                context,
+                appContext,
                 Manifest.permission.BLUETOOTH
             ) == PackageManager.PERMISSION_GRANTED
         }

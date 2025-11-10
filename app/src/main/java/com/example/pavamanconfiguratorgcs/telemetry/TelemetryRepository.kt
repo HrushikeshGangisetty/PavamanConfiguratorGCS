@@ -134,12 +134,9 @@ class TelemetryRepository {
         mavFrame = conn.mavFrame
             .shareIn(scope, SharingStarted.Eagerly, replay = 0)
 
-        // Log raw messages
-        scope.launch {
-            mavFrame.collect {
-                Log.d(TAG, "Frame: ${it.message.javaClass.simpleName} (sysId=${it.systemId}, compId=${it.componentId})")
-            }
-        }
+        // NOTE: removed unfiltered logging of every MAVLink frame to avoid flooding logs and
+        // doing unnecessary processing on each message. Keep only targeted collectors below
+        // (e.g., heartbeat handling) which perform the required logic.
 
         // Detect FCU and handle heartbeat
         scope.launch {

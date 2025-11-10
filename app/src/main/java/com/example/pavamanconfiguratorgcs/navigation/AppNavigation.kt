@@ -25,6 +25,7 @@ sealed class Screen(val route: String) {
     object Configurations : Screen("configurations")
     object FullParams : Screen("full_params")
     object EscCalibration : Screen("esc_calibration")
+    object FrameType : Screen("frame_type")
 }
 
 @Composable
@@ -99,6 +100,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToEscCalibration = {
                     navController.navigate(Screen.EscCalibration.route)
+                },
+                onNavigateToFrameType = {
+                    navController.navigate(Screen.FrameType.route)
                 }
             )
         }
@@ -125,6 +129,27 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             EscCalibrationScreen(
                 viewModel = escCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.FrameType.route) {
+            // Create FrameTypeViewModel with dependencies using fully-qualified name to avoid import issues
+            val frameTypeViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            // Use fully-qualified composable reference
+            com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeScreen(
+                viewModel = frameTypeViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
