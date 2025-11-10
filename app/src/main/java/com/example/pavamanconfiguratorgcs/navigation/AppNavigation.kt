@@ -222,8 +222,19 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         composable(Screen.Failsafe.route) {
-            // Simple failsafe screen - no ViewModel required currently
+            // Create FailsafeViewModel with dependencies
+            val failsafeViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
             FailsafeScreen(
+                viewModel = failsafeViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
