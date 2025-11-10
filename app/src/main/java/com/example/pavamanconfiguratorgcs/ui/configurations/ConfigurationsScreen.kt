@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 fun ConfigurationsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEscCalibration: () -> Unit = {},
+    onNavigateToFlightModes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -76,6 +77,7 @@ fun ConfigurationsScreen(
                         onClick = {
                             when (item.route) {
                                 "esc_calibration" -> onNavigateToEscCalibration()
+                                "flight_modes" -> onNavigateToFlightModes()
                                 // Handle other routes here
                             }
                         }
@@ -130,7 +132,8 @@ data class ConfigurationItem(
 
 fun getConfigurationItems(): List<ConfigurationItem> {
     return listOf(
-        ConfigurationItem("ESC Calibration", "esc_calibration")
+        ConfigurationItem("ESC Calibration", "esc_calibration"),
+        ConfigurationItem("Flight Modes", "flight_modes")
         // Add more items here as needed
     )
 }
