@@ -22,11 +22,12 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ConfigurationsScreen(
     onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
     onNavigateToMotorTest: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onNavigateToFailsafe: () -> Unit = {} // added failsafe navigation callback
 ) {
     Scaffold(
         topBar = {
@@ -82,6 +83,7 @@ fun ConfigurationsScreen(
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
                                 "motor_test" -> onNavigateToMotorTest()
+                                "failsafe" -> onNavigateToFailsafe() // handle failsafe
                                 // Handle other routes here
                             }
                         }
@@ -139,7 +141,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
-        ConfigurationItem("Motor Test", "motor_test")
+        ConfigurationItem("Motor Test", "motor_test"),
+        ConfigurationItem("Failsafe", "failsafe") // added failsafe item
         // Add more items here as needed
     )
 }
