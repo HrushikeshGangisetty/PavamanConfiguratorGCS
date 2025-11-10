@@ -25,6 +25,7 @@ fun ConfigurationsScreen(
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
+    onNavigateToMotorTest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -80,6 +81,7 @@ fun ConfigurationsScreen(
                                 "esc_calibration" -> onNavigateToEscCalibration()
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
+                                "motor_test" -> onNavigateToMotorTest()
                                 // Handle other routes here
                             }
                         }
@@ -136,7 +138,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
     return listOf(
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
-        ConfigurationItem("Flight Modes", "flight_modes")
+        ConfigurationItem("Flight Modes", "flight_modes"),
+        ConfigurationItem("Motor Test", "motor_test")
         // Add more items here as needed
     )
 }
