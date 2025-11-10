@@ -30,6 +30,7 @@ sealed class Screen(val route: String) {
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
+    object ServoOutput : Screen("servo_output")
 }
 
 @Composable
@@ -40,7 +41,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     // Create shared ViewModel with the repository from the Application
     val sharedViewModel: SharedViewModel = viewModel(
-        factory = ViewModelFactory(application.telemetryRepository)
+        factory = ViewModelFactory(application.telemetryRepository, application.servoRepository)
     )
 
     val telemetryRepository = sharedViewModel.getTelemetryRepository()
@@ -110,6 +111,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToFlightModes = {
                     navController.navigate(Screen.FlightModes.route)
+                },
+                onNavigateToServoOutput = {
+                    navController.navigate(Screen.ServoOutput.route)
                 }
             )
         }
@@ -186,6 +190,25 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             FlightModesScreen(
                 viewModel = flightModesViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.ServoOutput.route) {
+            // Create ServoOutputViewModel with dependencies
+            val servoOutputViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel(application.servoRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputScreen(
+                viewModel = servoOutputViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -22,10 +22,11 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ConfigurationsScreen(
     onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier,
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onNavigateToServoOutput: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -80,6 +81,7 @@ fun ConfigurationsScreen(
                                 "esc_calibration" -> onNavigateToEscCalibration()
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
+                                "servo_output" -> onNavigateToServoOutput()
                                 // Handle other routes here
                             }
                         }
@@ -136,7 +138,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
     return listOf(
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
-        ConfigurationItem("Flight Modes", "flight_modes")
+        ConfigurationItem("Flight Modes", "flight_modes"),
+        ConfigurationItem("Servo Output", "servo_output")
         // Add more items here as needed
     )
 }
