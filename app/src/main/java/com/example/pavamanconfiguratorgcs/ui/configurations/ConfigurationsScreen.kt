@@ -27,7 +27,8 @@ fun ConfigurationsScreen(
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
     onNavigateToMotorTest: () -> Unit = {},
-    onNavigateToFailsafe: () -> Unit = {} // added failsafe navigation callback
+    onNavigateToFailsafe: () -> Unit = {},
+    onNavigateToBatteryMonitor: () -> Unit = {} // new battery monitor navigation callback
 ) {
     Scaffold(
         topBar = {
@@ -83,7 +84,8 @@ fun ConfigurationsScreen(
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
                                 "motor_test" -> onNavigateToMotorTest()
-                                "failsafe" -> onNavigateToFailsafe() // handle failsafe
+                                "failsafe" -> onNavigateToFailsafe()
+                                "battery_monitor" -> onNavigateToBatteryMonitor()
                                 // Handle other routes here
                             }
                         }
@@ -142,7 +144,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
         ConfigurationItem("Motor Test", "motor_test"),
-        ConfigurationItem("Failsafe", "failsafe") // added failsafe item
+        ConfigurationItem("Failsafe", "failsafe"),
+        ConfigurationItem("Battery Monitor", "battery_monitor")
         // Add more items here as needed
     )
 }
