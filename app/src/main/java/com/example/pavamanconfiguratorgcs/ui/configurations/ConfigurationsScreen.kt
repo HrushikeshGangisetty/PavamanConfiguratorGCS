@@ -26,7 +26,8 @@ fun ConfigurationsScreen(
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
-    onNavigateToServoOutput: () -> Unit = {}
+    onNavigateToServoOutput: () -> Unit = {},
+    onNavigateToSerialPorts: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -82,6 +83,7 @@ fun ConfigurationsScreen(
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
                                 "servo_output" -> onNavigateToServoOutput()
+                                "serial_ports" -> onNavigateToSerialPorts()
                                 // Handle other routes here
                             }
                         }
@@ -139,7 +141,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
-        ConfigurationItem("Servo Output", "servo_output")
+        ConfigurationItem("Servo Output", "servo_output"),
+        ConfigurationItem("Serial Ports", "serial_ports")
         // Add more items here as needed
     )
 }

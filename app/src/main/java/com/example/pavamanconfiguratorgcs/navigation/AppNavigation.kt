@@ -31,6 +31,7 @@ sealed class Screen(val route: String) {
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
     object ServoOutput : Screen("servo_output")
+    object SerialPorts : Screen("serial_ports")
 }
 
 @Composable
@@ -114,6 +115,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToServoOutput = {
                     navController.navigate(Screen.ServoOutput.route)
+                },
+                onNavigateToSerialPorts = {
+                    navController.navigate(Screen.SerialPorts.route)
                 }
             )
         }
@@ -209,6 +213,29 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputScreen(
                 viewModel = servoOutputViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.SerialPorts.route) {
+            // Create SerialPortsViewModel with dependencies
+            val serialPortsViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsViewModel(
+                            parameterRepository,
+                            application.serialPortRepository
+                        ) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsScreen(
+                viewModel = serialPortsViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

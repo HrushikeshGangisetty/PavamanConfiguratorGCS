@@ -10,6 +10,7 @@ import com.divpundir.mavlink.api.wrap
 import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.definitions.minimal.*
 import com.example.pavamanconfiguratorgcs.telemetry.connections.MavConnectionProvider
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -38,6 +39,9 @@ class TelemetryRepository {
         private set
     lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
         private set
+
+    // Parameter repository instance (lazy initialized)
+    private var parameterRepository: ParameterRepository? = null
 
     // Track last heartbeat time from FCU (thread-safe using AtomicLong)
     private val lastFcuHeartbeatTime = AtomicLong(0L)
@@ -246,5 +250,16 @@ class TelemetryRepository {
         _fcuDetected.value = false
         lastFcuHeartbeatTime.set(0L)
         Log.d(TAG, "Disconnected")
+    }
+
+    /**
+     * Get or create the ParameterRepository instance
+     */
+    fun getParameterRepository(): ParameterRepository {
+        if (parameterRepository == null) {
+            val conn = connection ?: throw IllegalStateException("Not connected to vehicle")
+            parameterRepository = ParameterRepository(conn, scope)
+        }
+        return parameterRepository!!
     }
 }
