@@ -21,6 +21,7 @@ import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
 import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
+import com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeScreen
 
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
@@ -31,6 +32,7 @@ sealed class Screen(val route: String) {
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
     object MotorTest : Screen("motor_test")
+    object Failsafe : Screen("failsafe")
 }
 
 @Composable
@@ -114,6 +116,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToMotorTest = {
                     navController.navigate(Screen.MotorTest.route)
+                },
+                onNavigateToFailsafe = {
+                    navController.navigate(Screen.Failsafe.route)
                 }
             )
         }
@@ -213,6 +218,13 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateBack = {
                     navController.popBackStack()
                 }
+            )
+        }
+
+        composable(Screen.Failsafe.route) {
+            // Simple failsafe screen - no ViewModel required currently
+            FailsafeScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }
