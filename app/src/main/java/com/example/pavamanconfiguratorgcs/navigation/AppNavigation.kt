@@ -22,6 +22,7 @@ import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
 import com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeScreen
+import com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorScreen
 
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
@@ -33,6 +34,7 @@ sealed class Screen(val route: String) {
     object FlightModes : Screen("flight_modes")
     object MotorTest : Screen("motor_test")
     object Failsafe : Screen("failsafe")
+    object BatteryMonitor : Screen("battery_monitor")
 }
 
 @Composable
@@ -119,6 +121,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToFailsafe = {
                     navController.navigate(Screen.Failsafe.route)
+                },
+                onNavigateToBatteryMonitor = {
+                    navController.navigate(Screen.BatteryMonitor.route)
                 }
             )
         }
@@ -215,14 +220,11 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestScreen(
                 viewModel = motorTestViewModel,
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
         composable(Screen.Failsafe.route) {
-            // Create FailsafeViewModel with dependencies
             val failsafeViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeViewModel = viewModel(
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
@@ -232,11 +234,14 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     }
                 }
             )
-
             FailsafeScreen(
                 viewModel = failsafeViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
+        }
+
+        composable(Screen.BatteryMonitor.route) {
+            BatteryMonitorScreen(onNavigateBack = { navController.popBackStack() })
         }
     }
 }
