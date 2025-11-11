@@ -9,7 +9,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.pavamanconfiguratorgcs.PavamanApplication
 import com.example.pavamanconfiguratorgcs.ui.SharedViewModel
-import com.example.pavamanconfiguratorgcs.ui.ViewModelFactory
 import com.example.pavamanconfiguratorgcs.ui.configurations.ConfigurationsScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationViewModel
@@ -21,6 +20,8 @@ import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
 import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
@@ -30,12 +31,8 @@ sealed class Screen(val route: String) {
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
-<<<<<<< HEAD
     object ServoOutput : Screen("servo_output")
     object SerialPorts : Screen("serial_ports")
-=======
-    object MotorTest : Screen("motor_test")
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
 }
 
 @Composable
@@ -46,10 +43,18 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     // Create shared ViewModel with the repository from the Application
     val sharedViewModel: SharedViewModel = viewModel(
-        factory = ViewModelFactory(application.telemetryRepository, application.servoRepository)
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return SharedViewModel(application.telemetryRepository) as T
+            }
+        }
     )
 
     val telemetryRepository = sharedViewModel.getTelemetryRepository()
+
+    // Read FCU detection state from the shared view model
+    val fcuDetected by sharedViewModel.fcuDetected.collectAsState(initial = false)
 
     NavHost(
         navController = navController,
@@ -117,16 +122,11 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateToFlightModes = {
                     navController.navigate(Screen.FlightModes.route)
                 },
-<<<<<<< HEAD
                 onNavigateToServoOutput = {
                     navController.navigate(Screen.ServoOutput.route)
                 },
                 onNavigateToSerialPorts = {
                     navController.navigate(Screen.SerialPorts.route)
-=======
-                onNavigateToMotorTest = {
-                    navController.navigate(Screen.MotorTest.route)
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                 }
             )
         }
@@ -186,7 +186,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = frameTypeViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
-                }
+                },
+                fcuDetected = fcuDetected
             )
         }
 
@@ -210,7 +211,6 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             )
         }
 
-<<<<<<< HEAD
         composable(Screen.ServoOutput.route) {
             // Create ServoOutputViewModel with dependencies
             val servoOutputViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel = viewModel(
@@ -218,21 +218,10 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                         return com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel(application.servoRepository) as T
-=======
-        composable(Screen.MotorTest.route) {
-            // Create MotorTestViewModel with dependencies
-            val motorTestViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel = viewModel(
-                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
-                        return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository) as T
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                     }
                 }
             )
 
-<<<<<<< HEAD
             com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputScreen(
                 viewModel = servoOutputViewModel,
                 onNavigateBack = {
@@ -258,10 +247,6 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsScreen(
                 viewModel = serialPortsViewModel,
-=======
-            com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestScreen(
-                viewModel = motorTestViewModel,
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                 onNavigateBack = {
                     navController.popBackStack()
                 }

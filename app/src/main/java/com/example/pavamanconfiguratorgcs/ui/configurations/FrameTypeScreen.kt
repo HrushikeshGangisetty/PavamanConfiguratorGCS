@@ -21,7 +21,8 @@ import com.example.pavamanconfiguratorgcs.data.models.FrameType
 fun FrameTypeScreen(
     viewModel: FrameTypeViewModel,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fcuDetected: Boolean = false // new param: whether FCU/heartbeat has been observed
 ) {
     // Collect states from the new ViewModel API
     val frameConfig by viewModel.frameConfig.collectAsState()
@@ -30,9 +31,11 @@ fun FrameTypeScreen(
     val uiMessage by viewModel.uiMessage.collectAsState()
     val motorLayout by viewModel.motorLayout.collectAsState()
 
-    // Detect frame parameters when screen opens
-    LaunchedEffect(Unit) {
-        viewModel.detectFrameParameters()
+    // Detect frame parameters when screen opens or when FCU is detected
+    LaunchedEffect(fcuDetected) {
+        if (fcuDetected) {
+            viewModel.detectFrameParameters()
+        }
     }
 
     Scaffold(

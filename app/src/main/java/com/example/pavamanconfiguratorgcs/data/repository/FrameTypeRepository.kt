@@ -54,27 +54,45 @@ class FrameTypeRepository(
             // Get all parameters from cache
             var allParams = parameterRepository.getCachedParametersSnapshot()
 
-            // If cache is empty, attempt to request parameters from the FCU
+            // If cache is empty, attempt to request parameters from the FCU with retries
             if (allParams.isEmpty()) {
                 Log.w(TAG, "⚠️ No parameters loaded. Attempting to request parameters from vehicle...")
 
-                // Try requesting all params (one or two attempts)
-                try {
-                    val fetched = parameterRepository.requestAllParameters()
-                    if (fetched.isNotEmpty()) {
-                        allParams = fetched
-                        Log.d(TAG, "✅ Fetched ${fetched.size} parameters via requestAllParameters()")
-                    } else {
-                        // As a last resort try prefix-based discovery for FRAME-related params
-                        Log.w(TAG, "No parameters returned from requestAllParameters(); attempting prefix search for 'FRAME'")
+                val maxAttempts = 5
+                var attempt = 0
+                var fetched: Map<String, com.example.pavamanconfiguratorgcs.data.ParameterRepository.ParameterValue> = emptyMap()
+
+                while (attempt < maxAttempts && fetched.isEmpty()) {
+                    attempt++
+                    try {
+                        Log.d(TAG, "Attempt $attempt/$maxAttempts - requesting all parameters from FCU (timeout 8000ms)")
+                        fetched = parameterRepository.requestAllParameters(8000L)
+                        if (fetched.isNotEmpty()) {
+                            allParams = fetched
+                            Log.d(TAG, "✅ Fetched ${fetched.size} parameters on attempt $attempt")
+                            break
+                        } else {
+                            Log.w(TAG, "No parameters returned on attempt $attempt")
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error requesting parameters on attempt $attempt: ${e.message}")
+                    }
+
+                    // Wait a bit before retrying to allow the connection/FCU to respond
+                    delay(1000L * attempt)
+                }
+
+                if (allParams.isEmpty()) {
+                    Log.w(TAG, "No parameters returned from requestAllParameters after $maxAttempts attempts; attempting prefix search for 'FRAME'")
+                    try {
                         val found = parameterRepository.findParametersByPrefix("FRAME")
                         if (found.isNotEmpty()) {
                             allParams = found
-                            Log.d(TAG, "✅ Found ${found.size} FRAME-related parameters via findParametersByPrefix")
+                            Log.d(TAG, "✅ Found ${found.size} FRAME-related parameters via prefix search")
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error during prefix search for parameters: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error while requesting parameters: ${e.message}")
                 }
             }
 
