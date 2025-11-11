@@ -27,7 +27,12 @@ fun ConfigurationsScreen(
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
     onNavigateToServoOutput: () -> Unit = {},
+<<<<<<< HEAD
     onNavigateToSerialPorts: () -> Unit = {}
+=======
+    onNavigateToSerialPorts: () -> Unit = {},
+    onNavigateToMotorTest: () -> Unit = {}
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
 ) {
     Scaffold(
         topBar = {
@@ -84,6 +89,10 @@ fun ConfigurationsScreen(
                                 "flight_modes" -> onNavigateToFlightModes()
                                 "servo_output" -> onNavigateToServoOutput()
                                 "serial_ports" -> onNavigateToSerialPorts()
+<<<<<<< HEAD
+=======
+                                "motor_test" -> onNavigateToMotorTest()
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
                                 // Handle other routes here
                             }
                         }
@@ -142,7 +151,12 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
         ConfigurationItem("Servo Output", "servo_output"),
+<<<<<<< HEAD
         ConfigurationItem("Serial Ports", "serial_ports")
+=======
+        ConfigurationItem("Serial Ports", "serial_ports"),
+        ConfigurationItem("Motor Test", "motor_test")
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
         // Add more items here as needed
     )
 }

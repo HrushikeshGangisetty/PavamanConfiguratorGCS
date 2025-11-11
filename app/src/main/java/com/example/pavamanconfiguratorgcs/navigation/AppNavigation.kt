@@ -31,8 +31,17 @@ sealed class Screen(val route: String) {
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
+<<<<<<< HEAD
     object ServoOutput : Screen("servo_output")
     object SerialPorts : Screen("serial_ports")
+=======
+
+    object ServoOutput : Screen("servo_output")
+    object SerialPorts : Screen("serial_ports")
+
+    object MotorTest : Screen("motor_test")
+
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
 }
 
 @Composable
@@ -127,6 +136,12 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToSerialPorts = {
                     navController.navigate(Screen.SerialPorts.route)
+<<<<<<< HEAD
+=======
+                },
+                onNavigateToMotorTest = {
+                    navController.navigate(Screen.MotorTest.route)
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
                 }
             )
         }
@@ -247,6 +262,29 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsScreen(
                 viewModel = serialPortsViewModel,
+<<<<<<< HEAD
+=======
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.MotorTest.route) {
+            // Create MotorTestViewModel with dependencies
+            val motorTestViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestScreen(
+                viewModel = motorTestViewModel,
+>>>>>>> 5dc082c06f6b8c178e0a648543afea246f46e50e
                 onNavigateBack = {
                     navController.popBackStack()
                 }
