@@ -30,8 +30,12 @@ sealed class Screen(val route: String) {
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
+<<<<<<< HEAD
     object ServoOutput : Screen("servo_output")
     object SerialPorts : Screen("serial_ports")
+=======
+    object MotorTest : Screen("motor_test")
+>>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
 }
 
 @Composable
@@ -113,11 +117,16 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateToFlightModes = {
                     navController.navigate(Screen.FlightModes.route)
                 },
+<<<<<<< HEAD
                 onNavigateToServoOutput = {
                     navController.navigate(Screen.ServoOutput.route)
                 },
                 onNavigateToSerialPorts = {
                     navController.navigate(Screen.SerialPorts.route)
+=======
+                onNavigateToMotorTest = {
+                    navController.navigate(Screen.MotorTest.route)
+>>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                 }
             )
         }
@@ -201,6 +210,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
             )
         }
 
+<<<<<<< HEAD
         composable(Screen.ServoOutput.route) {
             // Create ServoOutputViewModel with dependencies
             val servoOutputViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel = viewModel(
@@ -208,10 +218,21 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                         return com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel(application.servoRepository) as T
+=======
+        composable(Screen.MotorTest.route) {
+            // Create MotorTestViewModel with dependencies
+            val motorTestViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository) as T
+>>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                     }
                 }
             )
 
+<<<<<<< HEAD
             com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputScreen(
                 viewModel = servoOutputViewModel,
                 onNavigateBack = {
@@ -237,6 +258,10 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsScreen(
                 viewModel = serialPortsViewModel,
+=======
+            com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestScreen(
+                viewModel = motorTestViewModel,
+>>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                 onNavigateBack = {
                     navController.popBackStack()
                 }
