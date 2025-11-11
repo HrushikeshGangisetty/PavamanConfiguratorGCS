@@ -2,8 +2,6 @@ package com.example.pavamanconfiguratorgcs.ui.configurations
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,6 +30,9 @@ fun FailsafeScreen(
     val imminent by viewModel.isThrottleFailsafeImminent.collectAsState()
     val successMessage by viewModel.successMessage.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val isConnected by viewModel.isConnected.collectAsState()
+    val foundParams by viewModel.foundParams.collectAsState()
+    var prefix by remember { mutableStateOf("BATT") }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -84,15 +85,43 @@ fun FailsafeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             LiveStatusPanel(status = status, imminent = imminent, viewModel = viewModel)
+            // Connection indicator
+            Card(colors = CardDefaults.cardColors(containerColor = if (isConnected) Color(0xFF2E7D32) else Color(0xFFB00020))) {
+                Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Text(if (isConnected) "Connected to FC" else "Disconnected", color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
+            }
             RcServoBars(status = status)
-            BatteryFailsafeConfig(config = config, onChange = viewModel::updateLocalConfig, onWriteAll = { viewModel.setAllBatteryFailsafe() }, onWriteSingle = viewModel::writeParameterChange)
-            ThrottleFailsafeConfig(config = config, onChange = viewModel::updateLocalConfig, onWrite = viewModel::writeParameterChange)
-            GcsFailsafeConfig(config = config, onChange = viewModel::updateLocalConfig, onWrite = viewModel::writeParameterChange)
+            // Diagnostic: find parameters
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2C))) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Diagnostic: Find Params by Prefix", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = prefix, onValueChange = { prefix = it }, modifier = Modifier.weight(1f), label = { Text("Prefix") })
+                        Button(onClick = { viewModel.findParametersByPrefix(prefix) }, enabled = isConnected) { Text("Search") }
+                    }
+                    if (foundParams.isNotEmpty()) {
+                        foundParams.entries.sortedBy { it.key }.forEach { (k, v) ->
+                            Text("$k = $v", color = Color(0xFFCCCCCC))
+                        }
+                    }
+                }
+            }
+            BatteryFailsafeConfig(
+                config = config,
+                onChange = viewModel::updateLocalConfig,
+                onWriteAll = { viewModel.setAllBatteryFailsafe() },
+                onWriteSingle = { name, value -> viewModel.writeParameterChange(name, value) },
+                isConnected = isConnected
+            )
+            ThrottleFailsafeConfig(config = config, onChange = viewModel::updateLocalConfig, onWrite = viewModel::writeParameterChange, isConnected = isConnected)
+            GcsFailsafeConfig(config = config, onChange = viewModel::updateLocalConfig, onWrite = viewModel::writeParameterChange, isConnected = isConnected)
         }
     }
 }
 
 // Alias composable to match requested naming in specification.
+@Suppress("unused")
 @Composable
 fun FailsafeConfigScreen(
     viewModel: FailsafeViewModel,
@@ -151,7 +180,10 @@ private fun PwmBar(label: String, pwm: Int) {
             Text(label, color = Color.White, fontSize = 13.sp)
             Text("$pwm", color = Color.White, fontSize = 13.sp)
         }
-        LinearProgressIndicator(progress = fraction, modifier = Modifier.fillMaxWidth().height(6.dp), color = Color(0xFF4CAF50))
+        // Use lambda-style progress parameter to satisfy newer Compose APIs
+        LinearProgressIndicator(progress = { fraction }, modifier = Modifier
+            .fillMaxWidth()
+            .height(6.dp), color = Color(0xFF4CAF50))
     }
 }
 
@@ -160,7 +192,8 @@ private fun BatteryFailsafeConfig(
     config: FailsafeViewModel.FailsafeConfigState,
     onChange: (String, Any?) -> Unit,
     onWriteAll: () -> Unit,
-    onWriteSingle: (String, Any) -> Unit
+    onWriteSingle: (String, Any) -> Unit,
+    isConnected: Boolean
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2C))) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -187,16 +220,17 @@ private fun BatteryFailsafeConfig(
                 onChange("BATT_LOW_TIMER", txt.toIntOrNull())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { onWriteAll() }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
+                Button(onClick = { if (isConnected) onWriteAll() else { /* disabled */ } }, enabled = isConnected, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))) {
                     Text("SET ALL BATTERY", fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(onClick = {
                     // Write individually for convenience
+                    if (!isConnected) return@OutlinedButton
                     config.battFsLowAct?.let { onWriteSingle("BATT_FS_LOW_ACT", it) }
                     config.lowVolt?.let { onWriteSingle("LOW_VOLT", it) }
                     config.fsBattMah?.let { onWriteSingle("FS_BATT_MAH", it) }
                     config.battLowTimer?.let { onWriteSingle("BATT_LOW_TIMER", it) }
-                }) { Text("Set Individually") }
+                }, enabled = isConnected) { Text("Set Individually") }
             }
         }
     }
@@ -206,7 +240,8 @@ private fun BatteryFailsafeConfig(
 private fun ThrottleFailsafeConfig(
     config: FailsafeViewModel.FailsafeConfigState,
     onChange: (String, Any?) -> Unit,
-    onWrite: (String, Any) -> Unit
+    onWrite: (String, Any) -> Unit,
+    isConnected: Boolean
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2C))) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -225,8 +260,8 @@ private fun ThrottleFailsafeConfig(
                 onChange("FS_THR_VALUE", txt.toIntOrNull())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = { config.fsThrEnable?.let { onWrite("FS_THR_ENABLE", it) } }) { Text("Set Enable") }
-                OutlinedButton(onClick = { config.fsThrValue?.let { onWrite("FS_THR_VALUE", it) } }) { Text("Set Value") }
+                OutlinedButton(onClick = { if (isConnected) config.fsThrEnable?.let { onWrite("FS_THR_ENABLE", it) } }, enabled = isConnected) { Text("Set Enable") }
+                OutlinedButton(onClick = { if (isConnected) config.fsThrValue?.let { onWrite("FS_THR_VALUE", it) } }, enabled = isConnected) { Text("Set Value") }
             }
         }
     }
@@ -236,7 +271,8 @@ private fun ThrottleFailsafeConfig(
 private fun GcsFailsafeConfig(
     config: FailsafeViewModel.FailsafeConfigState,
     onChange: (String, Any?) -> Unit,
-    onWrite: (String, Any) -> Unit
+    onWrite: (String, Any) -> Unit,
+    isConnected: Boolean
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2E2E2C))) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -247,7 +283,7 @@ private fun GcsFailsafeConfig(
                 options = listOf(0 to "Disabled", 1 to "Enabled"),
                 onSelect = { onChange("FS_GCS_ENABLE", it) }
             )
-            OutlinedButton(onClick = { config.fsGcsEnable?.let { onWrite("FS_GCS_ENABLE", it) } }) { Text("Set GCS") }
+            OutlinedButton(onClick = { if (isConnected) config.fsGcsEnable?.let { onWrite("FS_GCS_ENABLE", it) } }, enabled = isConnected) { Text("Set GCS") }
         }
     }
 }

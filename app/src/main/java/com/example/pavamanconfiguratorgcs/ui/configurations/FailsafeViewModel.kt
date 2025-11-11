@@ -79,6 +79,39 @@ class FailsafeViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // Connection indicator observed from TelemetryRepository
+    private val _isConnected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    // Diagnostic: found parameters by prefix
+    private val _foundParams = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val foundParams: StateFlow<Map<String, Float>> = _foundParams.asStateFlow()
+
+    /**
+     * Diagnostic function: find parameters on the FCU whose name matches the given prefix.
+     * Populates [foundParams] with name -> value map for quick inspection in the UI.
+     */
+    fun findParametersByPrefix(prefix: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (telemetryRepository.connection == null) {
+                    _errorMessage.value = "No connection - cannot search parameters"
+                    return@launch
+                }
+                val map = parameterRepository.findParametersByPrefix(prefix)
+                if (map.isEmpty()) {
+                    _foundParams.value = emptyMap()
+                    _errorMessage.value = "No parameters found for prefix '$prefix'"
+                } else {
+                    _foundParams.value = map.mapValues { it.value.value }
+                    _successMessage.value = "Found ${map.size} parameters"
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Parameter search failed: ${e.message}"
+            }
+        }
+    }
+
     // Derived imminent throttle failsafe flag
     val isThrottleFailsafeImminent: StateFlow<Boolean> = combine(status, config) { s, c ->
         val thr = c.fsThrValue
@@ -92,9 +125,41 @@ class FailsafeViewModel(
 
     private var telemetryJob: Job? = null
 
+    // Track whether params are loaded once to avoid duplicate requests
+    private var paramsLoaded = false
+
     init {
+        // Monitor connection state to enable/disable UI actions and trigger parameter load
+        viewModelScope.launch(Dispatchers.IO) {
+            telemetryRepository.connectionState.collect { st ->
+                val connected = when (st) {
+                    is TelemetryRepository.ConnectionState.Connected,
+                    is TelemetryRepository.ConnectionState.HeartbeatVerified -> true
+                    else -> false
+                }
+                _isConnected.value = connected
+
+                if (connected && !paramsLoaded) {
+                    paramsLoaded = true
+                    // Load parameters once after connection established
+                    try {
+                        // Populate the repository cache first to ensure parameter types are known
+                        try {
+                            parameterRepository.requestAllParameters()
+                            Log.d(TAG, "Parameter cache populated after connect")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "requestAllParameters failed: ${e.message}")
+                        }
+                        loadFailsafeParameters()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to load failsafe params after connect: ${e.message}")
+                    }
+                }
+            }
+        }
+
         startTelemetryCollectors()
-        loadFailsafeParameters()
+        // Do not call loadFailsafeParameters() immediately here; wait for connection
     }
 
     /**
@@ -106,16 +171,12 @@ class FailsafeViewModel(
             telemetryRepository.mavFrame.collect { frame ->
                 when (val msg = frame.message) {
                     is Heartbeat -> {
-                        // Robust armed flag detection supporting both list and bitmask representations
+                        // Convert baseMode.value to Int via its string representation and check SAFETY_ARMED bit.
                         val armed = try {
-                            val base = msg.baseMode.value
-                            when (base) {
-                                is List<*> -> base.contains(MavModeFlag.SAFETY_ARMED)
-                                is UInt -> (base.toInt() and MavModeFlag.SAFETY_ARMED.value.toInt()) != 0
-                                is Int -> (base and MavModeFlag.SAFETY_ARMED.value.toInt()) != 0
-                                else -> false
-                            }
+                            val baseInt = msg.baseMode.value.toString().toIntOrNull() ?: 0
+                            (baseInt and MavModeFlag.SAFETY_ARMED.value.toInt()) != 0
                         } catch (_: Exception) { false }
+
                         val mode = try { msg.customMode.toInt() } catch (_: Exception) { -1 }
                         val modeText = if (mode >= 0) "Mode $mode" else _status.value.currentFlightMode
                         _status.update { it.copy(isArmed = armed, currentFlightMode = modeText) }
@@ -212,13 +273,77 @@ class FailsafeViewModel(
     }
 
     /**
+     * Generic helper: set a MAVLink parameter and then request it back to confirm the FCU accepted it.
+     * This increases the chance Mission Planner (or any other client) will see the same value.
+     */
+    private suspend fun setMavlinkParam(name: String, value: Float, paramType: MavParamType): ParameterRepository.ParameterResult {
+        val key = name.trim().uppercase()
+        Log.d(TAG, "Setting param $key -> $value (type=$paramType)")
+
+        // Quick pre-check: ensure we have an active connection and FCU detected
+        val conn = telemetryRepository.connection
+        if (conn == null || telemetryRepository.fcuSystemId == 0.toUByte()) {
+            Log.w(TAG, "No active connection or FCU not detected - cannot set $key")
+            return ParameterRepository.ParameterResult.Error("No active connection or FCU not detected")
+        }
+
+        // First attempt: normal set
+        val setRes = parameterRepository.setParameter(key, value, paramType)
+        if (setRes is ParameterRepository.ParameterResult.Success) {
+            // request param back to confirm
+            when (val r = parameterRepository.requestParameter(key)) {
+                is ParameterRepository.ParameterResult.Success -> {
+                    applyLocalConfigUpdate(key, r.parameter.value)
+                    Log.d(TAG, "Confirmed $key = ${r.parameter.value}")
+                    return r
+                }
+                else -> {
+                    Log.w(TAG, "Parameter $key set but requestParameter confirmation failed: $r")
+                    return r
+                }
+            }
+        }
+
+        // If first set failed or timed out, attempt a second write with force=true (some firmwares require exact typed writes)
+        Log.w(TAG, "Initial set failed for $key: $setRes - retrying with force")
+        try {
+            // The underlying repository's setParameter supports a 'force' flag; try that path.
+            val forced = parameterRepository.setParameter(key, value, paramType, force = true)
+            if (forced is ParameterRepository.ParameterResult.Success) {
+                when (val r2 = parameterRepository.requestParameter(key)) {
+                    is ParameterRepository.ParameterResult.Success -> {
+                        applyLocalConfigUpdate(key, r2.parameter.value)
+                        Log.d(TAG, "Forced write confirmed $key = ${r2.parameter.value}")
+                        return r2
+                    }
+                    else -> {
+                        Log.w(TAG, "Forced write succeeded but requestParameter failed for $key: $r2")
+                        return r2
+                    }
+                }
+            } else {
+                Log.e(TAG, "Forced write failed for $key: $forced")
+                return forced
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during forced write for $key", e)
+            return ParameterRepository.ParameterResult.Error(e.message ?: "Forced write exception")
+        }
+    }
+
+    /**
      * Write a single parameter change to the FCU immediately.
-     * Chooses a parameter-type override based on known ArduPilot definitions to avoid
-     * sending incorrect integer sizes (prevents rounding or truncation issues).
+     * Uses setMavlinkParam to ensure confirmation.
      */
     fun writeParameterChange(paramName: String, newValue: Any) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Quick connection check to fail fast and surface a helpful message
+                if (telemetryRepository.connection == null || telemetryRepository.fcuSystemId == 0.toUByte()) {
+                    _errorMessage.value = "No active connection or FCU not detected. Connect to vehicle first."
+                    return@launch
+                }
+
                 val key = paramName.trim().uppercase()
                 // Param-specific type overrides sourced from typical ArduPilot parameter metadata
                 val overrideType: MavParamType? = when (key) {
@@ -232,7 +357,7 @@ class FailsafeViewModel(
                     else -> null
                 }
 
-                val (value, type) = when (newValue) {
+                val (valueFloat, type) = when (newValue) {
                     is Int -> newValue.toFloat() to (overrideType ?: MavParamType.INT32)
                     is Float -> newValue to (overrideType ?: MavParamType.REAL32)
                     is Double -> newValue.toFloat() to (overrideType ?: MavParamType.REAL32)
@@ -245,23 +370,23 @@ class FailsafeViewModel(
                     else -> throw IllegalArgumentException("Unsupported value type")
                 }
 
-                when (val res = parameterRepository.setParameter(key, value, paramType = type)) {
-                    is ParameterRepository.ParameterResult.Success -> {
-                        _successMessage.value = "$key set"
-                        // Reflect change in config cache
-                        applyLocalConfigUpdate(key, value)
-                    }
-                    is ParameterRepository.ParameterResult.Error -> _errorMessage.value = "Failed: ${res.message}"
+                // Perform the write+confirm flow
+                val res = setMavlinkParam(key, valueFloat, type)
+
+                when (res) {
+                    is ParameterRepository.ParameterResult.Success -> _successMessage.value = "$key set -> ${res.parameter.value} (type=${res.parameter.type})"
+                    is ParameterRepository.ParameterResult.Error -> _errorMessage.value = "Failed to set $key: ${res.message}"
                     is ParameterRepository.ParameterResult.Timeout -> _errorMessage.value = "Timeout writing $key"
                 }
             } catch (e: Exception) {
-                _errorMessage.value = e.message
+                _errorMessage.value = "Exception writing param: ${e.message}"
             }
         }
     }
 
     /**
      * Write all battery failsafe parameters at once, using correct types per parameter.
+     * Refactored to use setMavlinkParam to confirm each write.
      */
     fun setAllBatteryFailsafe() {
         val c = _config.value
@@ -274,10 +399,10 @@ class FailsafeViewModel(
                 val lowTimer = c.battLowTimer ?: throw IllegalStateException("BATT_LOW_TIMER is empty")
 
                 val results = listOf(
-                    parameterRepository.setParameter(BATT_FS_LOW_ACT, battAct.toFloat(), MavParamType.INT8),
-                    parameterRepository.setParameter(LOW_VOLT, lowVolt, MavParamType.REAL32),
-                    parameterRepository.setParameter(FS_BATT_MAH, fsMah.toFloat(), MavParamType.INT32),
-                    parameterRepository.setParameter(BATT_LOW_TIMER, lowTimer.toFloat(), MavParamType.INT16)
+                    setMavlinkParam(BATT_FS_LOW_ACT, battAct.toFloat(), MavParamType.INT8),
+                    setMavlinkParam(LOW_VOLT, lowVolt, MavParamType.REAL32),
+                    setMavlinkParam(FS_BATT_MAH, fsMah.toFloat(), MavParamType.INT32),
+                    setMavlinkParam(BATT_LOW_TIMER, lowTimer.toFloat(), MavParamType.INT16)
                 )
 
                 val anyFail = results.any { it !is ParameterRepository.ParameterResult.Success }
