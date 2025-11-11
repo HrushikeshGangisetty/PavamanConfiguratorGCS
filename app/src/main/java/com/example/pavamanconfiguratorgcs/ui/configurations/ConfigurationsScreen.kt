@@ -26,13 +26,9 @@ fun ConfigurationsScreen(
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
-<<<<<<< HEAD
     onNavigateToServoOutput: () -> Unit = {},
-    onNavigateToSerialPorts: () -> Unit = {}
-=======
-    onNavigateToMotorTest: () -> Unit = {},
-    modifier: Modifier = Modifier
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
+    onNavigateToSerialPorts: () -> Unit = {},
+    onNavigateToMotorTest: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -87,12 +83,9 @@ fun ConfigurationsScreen(
                                 "esc_calibration" -> onNavigateToEscCalibration()
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
-<<<<<<< HEAD
                                 "servo_output" -> onNavigateToServoOutput()
                                 "serial_ports" -> onNavigateToSerialPorts()
-=======
                                 "motor_test" -> onNavigateToMotorTest()
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
                                 // Handle other routes here
                             }
                         }
@@ -150,12 +143,9 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
-<<<<<<< HEAD
         ConfigurationItem("Servo Output", "servo_output"),
-        ConfigurationItem("Serial Ports", "serial_ports")
-=======
+        ConfigurationItem("Serial Ports", "serial_ports"),
         ConfigurationItem("Motor Test", "motor_test")
->>>>>>> 2dede3fc0902d19cf82c11be86f09d7337dd8849
         // Add more items here as needed
     )
 }
