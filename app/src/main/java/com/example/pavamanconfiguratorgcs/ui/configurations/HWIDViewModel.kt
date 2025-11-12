@@ -123,7 +123,8 @@ class HWIDViewModel(
     private fun decodeBusAddress(rawId: UInt, paramName: String): String {
         val address = rawId and 0xFFu
         return if (address > 0u) {
-            "0x${address.toString(16).uppercase()}"
+            // Return decimal representation (base 10) instead of hex
+            address.toString()
         } else {
             // Heuristic: some params encode address in upper bytes or in the parameter name
             val nameUpper = paramName.uppercase()
@@ -136,7 +137,8 @@ class HWIDViewModel(
             if (!addrFromName.isNullOrEmpty()) {
                 try {
                     val v = addrFromName.toInt()
-                    "${v}"
+                    // return decimal digits
+                    v.toString()
                 } catch (_: Exception) {
                     "N/A"
                 }
@@ -146,4 +148,3 @@ class HWIDViewModel(
         }
     }
 }
-
