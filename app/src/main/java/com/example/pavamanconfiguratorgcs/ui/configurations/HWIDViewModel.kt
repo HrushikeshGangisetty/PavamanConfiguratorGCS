@@ -32,6 +32,9 @@ class HWIDViewModel(
     private val _devices = MutableStateFlow<List<DeviceInfoDetailed>>(emptyList())
     val devices: StateFlow<List<DeviceInfoDetailed>> = _devices.asStateFlow()
 
+    // Expose repository loading progress so UI can show counts/progress and errors
+    val loadingProgress: StateFlow<ParameterRepository.LoadingProgress> = parameterRepository.loadingProgress
+
     init {
         // Observe parameter map and update devices when parameters change
         viewModelScope.launch {
@@ -60,14 +63,22 @@ class HWIDViewModel(
         }
     }
 
+    /** Convenience: if loading is incomplete, attempt a re-request */
+    fun retryIfIncomplete() {
+        val lp = loadingProgress.value
+        if (!lp.isComplete) {
+            refreshParameters()
+        }
+    }
+
     /** Convert raw Parameter map into sorted DeviceInfoDetailed list */
     private fun processParameters(params: Map<String, Parameter>): List<DeviceInfoDetailed> {
-        // Filtering rules
+        // Filtering rules - be generous and case-insensitive to catch different naming conventions
         val filtered = params.values
             .filter { p ->
-                val name = p.name
-                val hasId = name.contains("_ID") || name.contains("_DEVID")
-                val excluded = name.contains("_IDX") || name.contains("FRSKY")
+                val nameUpper = p.name.uppercase()
+                val hasId = nameUpper.contains("_ID") || nameUpper.contains("_DEVID") || nameUpper.contains("DEVICEID") || nameUpper.contains("UID") || nameUpper.endsWith("ID")
+                val excluded = nameUpper.contains("_IDX") || nameUpper.contains("FRSKY")
                 hasId && !excluded
             }
 
