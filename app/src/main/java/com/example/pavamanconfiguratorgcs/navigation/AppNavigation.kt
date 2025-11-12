@@ -35,6 +35,7 @@ sealed class Screen(val route: String) {
     object SerialPorts : Screen("serial_ports")
     object MotorTest : Screen("motor_test")
     object CompassCalibration : Screen("compass_calibration")
+    object RCCalibration : Screen("rc_calibration")
 }
 
 @Composable
@@ -145,6 +146,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToCompassCalibration = {
                     navController.navigate(Screen.CompassCalibration.route)
+                },
+                onNavigateToRCCalibration = {
+                    navController.navigate(Screen.RCCalibration.route)
                 }
             )
         }
@@ -295,6 +299,26 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationScreen(
                 viewModel = compassCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.RCCalibration.route) {
+            // Create RC Calibration ViewModel with dependencies
+            val rcCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationScreen(
+                viewModel = rcCalibrationViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
