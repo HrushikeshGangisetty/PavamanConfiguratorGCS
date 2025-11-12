@@ -18,12 +18,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class ConnectionType {
-    TCP, BLUETOOTH
+    TCP, BLUETOOTH, USB
 }
 
 data class PairedDevice(
     val name: String,
     val address: String
+)
+
+data class UsbSerialDevice(
+    val name: String,
+    val vendorId: Int,
+    val productId: Int,
+    val deviceId: Int
 )
 
 @Composable
@@ -104,6 +111,10 @@ fun ConnectionScreen(
             val device by viewModel.selectedDevice.collectAsStateWithLifecycle()
             device != null
         }
+        ConnectionType.USB -> {
+            val device by viewModel.selectedUsbDevice.collectAsStateWithLifecycle()
+            device != null
+        }
     }
 
     Box(
@@ -125,7 +136,7 @@ fun ConnectionScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            val tabs = listOf("TCP/IP", "Bluetooth")
+            val tabs = listOf("TCP/IP", "Bluetooth", "USB")
             TabRow(
                 selectedTabIndex = connectionType.ordinal,
                 containerColor = Color(0xFF333330)
@@ -144,6 +155,7 @@ fun ConnectionScreen(
             when (connectionType) {
                 ConnectionType.TCP -> TcpConnectionContent(viewModel)
                 ConnectionType.BLUETOOTH -> BluetoothConnectionContent(viewModel)
+                ConnectionType.USB -> UsbConnectionContent(viewModel, isConnecting) { startConnection() }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -255,6 +267,106 @@ fun BluetoothConnectionContent(viewModel: ConnectionViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UsbConnectionContent(viewModel: ConnectionViewModel, @Suppress("UNUSED_PARAMETER") isConnecting: Boolean, @Suppress("UNUSED_PARAMETER") onConnect: () -> Unit) {
+    val usbDevices by viewModel.usbDevices.collectAsStateWithLifecycle()
+    val selectedUsbDevice by viewModel.selectedUsbDevice.collectAsStateWithLifecycle()
+    val baudRate by viewModel.baudRate.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+
+    // Common baud rates for serial communication
+    val baudRates = listOf(9600, 57600, 115200, 230400, 460800, 921600)
+
+    // Trigger device discovery when this composable is first displayed
+    LaunchedEffect(Unit) {
+        viewModel.discoverUsbDevices()
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Device list
+        if (usbDevices.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No compatible USB serial devices found.\nPlease ensure the device is connected via USB-OTG cable.",
+                    color = Color.White,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                items(usbDevices) { device ->
+                    UsbDeviceRow(
+                        device = device,
+                        isSelected = device.deviceId == selectedUsbDevice?.deviceId,
+                        onClick = { viewModel.onUsbDeviceSelected(device) }
+                    )
+                }
+            }
+        }
+
+        // Baud rate dropdown
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = baudRate.toString(),
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Baud Rate", color = Color.White) },
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color.White,
+                    unfocusedBorderColor = Color.Gray
+                )
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                baudRates.forEach { rate ->
+                    DropdownMenuItem(
+                        text = { Text(rate.toString()) },
+                        onClick = {
+                            viewModel.onBaudRateChange(rate)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        // Refresh devices button
+        OutlinedButton(
+            onClick = { viewModel.discoverUsbDevices() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Refresh Devices", color = Color.White)
+        }
+    }
+}
+
 @Composable
 fun DeviceRow(device: PairedDevice, isSelected: Boolean, onClick: () -> Unit) {
     Row(
@@ -268,6 +380,23 @@ fun DeviceRow(device: PairedDevice, isSelected: Boolean, onClick: () -> Unit) {
         Column {
             Text(device.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
             Text(device.address, color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+fun UsbDeviceRow(device: UsbSerialDevice, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Transparent)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text(device.name, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+            Text("VID: ${device.vendorId} PID: ${device.productId}", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
