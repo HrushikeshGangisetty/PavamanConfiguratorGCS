@@ -30,7 +30,8 @@ fun ConfigurationsScreen(
     onNavigateToSerialPorts: () -> Unit = {},
     onNavigateToMotorTest: () -> Unit = {},
     onNavigateToCompassCalibration: () -> Unit = {},
-    onNavigateToRCCalibration: () -> Unit = {}
+    onNavigateToRCCalibration: () -> Unit = {},
+    onNavigateToIMUCalibration: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -90,6 +91,7 @@ fun ConfigurationsScreen(
                                 "motor_test" -> onNavigateToMotorTest()
                                 "compass_calibration" -> onNavigateToCompassCalibration()
                                 "rc_calibration" -> onNavigateToRCCalibration()
+                                "imu_calibration" -> onNavigateToIMUCalibration()
                                 // Handle other routes here
                             }
                         }
@@ -151,7 +153,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("Serial Ports", "serial_ports"),
         ConfigurationItem("Motor Test", "motor_test"),
         ConfigurationItem("Compass Calibration", "compass_calibration"),
-        ConfigurationItem("RC Calibration", "rc_calibration")
+        ConfigurationItem("RC Calibration", "rc_calibration"),
+        ConfigurationItem("IMU Calibration", "imu_calibration")
         // Add more items here as needed
     )
 }
