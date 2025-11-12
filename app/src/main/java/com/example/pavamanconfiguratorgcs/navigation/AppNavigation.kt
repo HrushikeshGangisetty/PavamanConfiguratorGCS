@@ -386,7 +386,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel() as T
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel(parameterRepository) as T
                     }
                 }
             )
