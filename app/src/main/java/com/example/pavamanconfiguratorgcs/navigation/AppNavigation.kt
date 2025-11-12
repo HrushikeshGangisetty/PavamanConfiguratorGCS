@@ -54,6 +54,16 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     val telemetryRepository = sharedViewModel.getTelemetryRepository()
 
+    // Create app-scoped ParametersViewModel - created once and reused
+    val parametersViewModel: ParametersViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return ParametersViewModel(telemetryRepository) as T
+            }
+        }
+    )
+
     // Read FCU detection state from the shared view model
     val fcuDetected by sharedViewModel.fcuDetected.collectAsState(initial = false)
 
@@ -136,16 +146,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         composable(Screen.FullParams.route) {
-            // Create ParametersViewModel with the shared TelemetryRepository
-            val parametersViewModel: ParametersViewModel = viewModel(
-                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return ParametersViewModel(telemetryRepository) as T
-                    }
-                }
-            )
-
+            // Use app-scoped ParametersViewModel - no recreation on each navigation
             ParametersScreen(
                 viewModel = parametersViewModel,
                 onNavigateBack = { navController.popBackStack() }

@@ -22,6 +22,7 @@ class ParametersViewModel(
     }
 
     private var parameterRepository: ParameterRepository? = null
+    private var hasLoadedInitially = false
 
     // All parameters from FC
     private val _allParameters = MutableStateFlow<List<Parameter>>(emptyList())
@@ -68,6 +69,11 @@ class ParametersViewModel(
         .map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    // Track if parameters have been loaded (at least once)
+    val isParametersLoaded: StateFlow<Boolean> = _allParameters
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     init {
         // Initialize parameter repository when connected
         viewModelScope.launch {
@@ -103,6 +109,13 @@ class ParametersViewModel(
                         else -> LoadingProgress.Idle
                     }
                 }
+            }
+
+            // Auto-fetch parameters once on initialization
+            if (!hasLoadedInitially) {
+                hasLoadedInitially = true
+                fetchParameters()
+                Log.d(TAG, "Auto-fetching parameters on first initialization")
             }
         }
     }
