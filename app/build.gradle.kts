@@ -79,6 +79,9 @@ dependencies {
     // Material Icons Extended (for additional icons)
     implementation("androidx.compose.material:material-icons-extended:1.7.5")
 
+    // USB Serial communication
+    implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
+
     // Parameter metadata fetching
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
