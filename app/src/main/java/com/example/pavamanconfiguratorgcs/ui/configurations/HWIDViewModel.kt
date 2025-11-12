@@ -15,7 +15,8 @@ import kotlinx.coroutines.launch
  */
 data class DeviceInfoDetailed(
     val paramName: String,
-    val deviceId: UInt,
+    // Expose device id as a decimal string to guarantee base-10 display in the UI
+    val deviceId: String,
     val busType: String,
     val busAddress: String
 )
@@ -72,14 +73,18 @@ class HWIDViewModel(
 
         val mapped = filtered.mapNotNull { p ->
             try {
-                val rawUInt = p.value.toInt().toUInt()
+                val rawUInt = parseParamToUInt(p)
 
                 val busType = decodeBusType(rawUInt, p.name)
                 val busAddress = decodeBusAddress(rawUInt, p.name)
 
+                // Log decimal device id for debugging so we can confirm ViewModel produces base-10 strings at runtime
+                Log.d(TAG, "HWID param ${p.name} -> decimal deviceId=${rawUInt.toString()}")
+
                 DeviceInfoDetailed(
                     paramName = p.name,
-                    deviceId = rawUInt,
+                    // ensure decimal (base 10) device id string
+                    deviceId = rawUInt.toString(),
                     busType = busType,
                     busAddress = busAddress
                 )
@@ -90,6 +95,41 @@ class HWIDViewModel(
         }
 
         return mapped.sortedBy { it.paramName }
+    }
+
+    // Parse Parameter into a 32-bit unsigned integer robustly.
+    // Accepts decimal strings, hex strings prefixed with 0x, or falls back to numeric Parameter.value.
+    private fun parseParamToUInt(p: Parameter): UInt {
+        // Try the formatted string first (this covers code-paths that may have preserved hex text)
+        val s = try {
+            p.getValueAsString().trim()
+        } catch (_: Exception) {
+            ""
+        }
+
+        if (s.isNotEmpty()) {
+            try {
+                if (s.startsWith("0x", true)) {
+                    // parse hex (allow large values)
+                    val hex = s.substring(2)
+                    return hex.toULong(16).toUInt()
+                }
+
+                // plain decimal string
+                val dec = s.toLongOrNull()
+                if (dec != null) return dec.toUInt()
+            } catch (e: Exception) {
+                Log.w(TAG, "parseParamToUInt: failed to parse string '$s' for ${p.name}: ${e.message}")
+            }
+        }
+
+        // Fallback to numeric float value stored in Parameter
+        return try {
+            p.value.toLong().toUInt()
+        } catch (e: Exception) {
+            Log.w(TAG, "parseParamToUInt fallback also failed for ${p.name}: ${e.message}")
+            0u
+        }
     }
 
     // Decode bus type using common ArduPilot-style encoding (bits 16-23)

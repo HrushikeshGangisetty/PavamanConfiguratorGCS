@@ -2,8 +2,6 @@ package com.example.pavamanconfiguratorgcs.ui.configurations
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -20,8 +18,8 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun HWIDScreen(
     viewModel: com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel,
-    onNavigateBack: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateBack: (() -> Unit)? = null
 ) {
     // Provide a safe initial value when collecting the StateFlow
     val devices by viewModel.devices.collectAsState(initial = emptyList())
@@ -59,10 +57,10 @@ fun HWIDScreen(
                     Text("Bus Address", modifier = Modifier.weight(0.2f), color = Color.White, fontWeight = FontWeight.Bold)
                 }
 
-                Divider(color = Color.LightGray)
+                HorizontalDivider(color = Color.LightGray)
 
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(items = devices) { device: com.example.pavamanconfiguratorgcs.ui.configurations.DeviceInfoDetailed ->
+                Column(modifier = Modifier.fillMaxSize().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (device in devices) {
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF4A4A48)),
                             modifier = Modifier.fillMaxWidth()
@@ -70,9 +68,15 @@ fun HWIDScreen(
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(device.paramName, modifier = Modifier.weight(0.4f), color = Color.White)
 
-                                // Device ID formatted as hex for readability
-                                val devHex = "0x" + device.deviceId.toLong().toString(16).uppercase()
-                                Text(devHex, modifier = Modifier.weight(0.2f), color = Color.White)
+                                // Display device ID as decimal (base 10). If a hex string slipped through, convert it here.
+                                val displayId = try {
+                                    val s = device.deviceId.trim()
+                                    if (s.startsWith("0x", true)) {
+                                        s.substring(2).toULong(16).toString()
+                                    } else s
+                                } catch (_: Exception) { device.deviceId }
+
+                                Text(displayId, modifier = Modifier.weight(0.2f), color = Color.White)
 
                                 Text(device.busType, modifier = Modifier.weight(0.2f), color = Color.White)
                                 Text(device.busAddress, modifier = Modifier.weight(0.2f), color = Color.White)
