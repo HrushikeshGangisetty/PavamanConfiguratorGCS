@@ -6,16 +6,16 @@ import com.divpundir.mavlink.adapters.coroutines.tryConnect
 import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
 import com.divpundir.mavlink.api.MavFrame
 import com.divpundir.mavlink.api.MavMessage
+import com.divpundir.mavlink.api.MavEnumValue
 import com.divpundir.mavlink.api.wrap
 import com.divpundir.mavlink.connection.StreamState
 import com.divpundir.mavlink.definitions.minimal.*
+import com.divpundir.mavlink.definitions.common.*
+import com.divpundir.mavlink.definitions.ardupilotmega.MagCalProgress
 import com.example.pavamanconfiguratorgcs.telemetry.connections.MavConnectionProvider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
 class TelemetryRepository {
@@ -39,6 +39,9 @@ class TelemetryRepository {
     lateinit var mavFrame: Flow<MavFrame<out MavMessage<*>>>
         private set
 
+    // Parameter repository instance (lazy initialized)
+    private var parameterRepository: ParameterRepository? = null
+
     // Track last heartbeat time from FCU (thread-safe using AtomicLong)
     private val lastFcuHeartbeatTime = AtomicLong(0L)
 
@@ -50,6 +53,19 @@ class TelemetryRepository {
 
     private val _fcuDetected = MutableStateFlow(false)
     val fcuDetected: StateFlow<Boolean> = _fcuDetected.asStateFlow()
+
+    // Compass calibration message flows
+    private val _magCalProgress = MutableSharedFlow<MagCalProgress>(replay = 0, extraBufferCapacity = 10)
+    val magCalProgress: SharedFlow<MagCalProgress> = _magCalProgress.asSharedFlow()
+
+    private val _magCalReport = MutableSharedFlow<MagCalReport>(replay = 0, extraBufferCapacity = 10)
+    val magCalReport: SharedFlow<MagCalReport> = _magCalReport.asSharedFlow()
+
+    private val _commandAck = MutableSharedFlow<CommandAck>(replay = 0, extraBufferCapacity = 10)
+    val commandAck: SharedFlow<CommandAck> = _commandAck.asSharedFlow()
+
+    private val _calibrationStatus = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 10)
+    val calibrationStatus: SharedFlow<String> = _calibrationStatus.asSharedFlow()
 
     sealed class ConnectionState {
         object Disconnected : ConnectionState()
@@ -153,6 +169,18 @@ class TelemetryRepository {
                         _fcuDetected.value = true
                         _droneHeartbeatReceived.value = true
                         _connectionState.value = ConnectionState.Connected
+
+                        // Proactively request parameters once FCU is detected
+                        scope.launch {
+                            try {
+                                Log.d(TAG, "FCU detected - requesting full parameter list from FCU")
+                                val paramRepo = getParameterRepository()
+                                val res = paramRepo.requestAllParameters()
+                                Log.d(TAG, "Parameter fetch result: $res")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to request parameters automatically: ${e.message}")
+                            }
+                        }
                     } else if (!_droneHeartbeatReceived.value) {
                         // FCU was detected before but heartbeat was lost, now it's back
                         Log.i(TAG, "FCU heartbeat resumed")
@@ -161,6 +189,48 @@ class TelemetryRepository {
                             _connectionState.value = ConnectionState.Connected
                         }
                     }
+                }
+        }
+
+        // Collect MAG_CAL_PROGRESS messages
+        scope.launch {
+            mavFrame
+                .filter { it.message is MagCalProgress }
+                .collect { frame ->
+                    val msg = frame.message as MagCalProgress
+                    _magCalProgress.emit(msg)
+                }
+        }
+
+        // Collect MAG_CAL_REPORT messages
+        scope.launch {
+            mavFrame
+                .filter { it.message is MagCalReport }
+                .collect { frame ->
+                    val msg = frame.message as MagCalReport
+                    _magCalReport.emit(msg)
+                }
+        }
+
+        // Collect COMMAND_ACK messages
+        scope.launch {
+            mavFrame
+                .filter { it.message is CommandAck }
+                .collect { frame ->
+                    val msg = frame.message as CommandAck
+                    _commandAck.emit(msg)
+                }
+        }
+
+        // Collect STATUSTEXT messages for calibration feedback
+        scope.launch {
+            mavFrame
+                .filter { it.message is Statustext }
+                .collect { frame ->
+                    val msg = frame.message as Statustext
+                    // Handle text as String directly (it's already a String in the MAVLink definition)
+                    val text = msg.text.trimEnd('\u0000')
+                    _calibrationStatus.emit(text)
                 }
         }
     }
@@ -246,5 +316,117 @@ class TelemetryRepository {
         _fcuDetected.value = false
         lastFcuHeartbeatTime.set(0L)
         Log.d(TAG, "Disconnected")
+    }
+
+    /**
+     * Send a MAVLink command to the autopilot
+     */
+    suspend fun sendCommand(
+        commandId: UInt,
+        param1: Float = 0f,
+        param2: Float = 0f,
+        param3: Float = 0f,
+        param4: Float = 0f,
+        param5: Float = 0f,
+        param6: Float = 0f,
+        param7: Float = 0f
+    ): Boolean {
+        val conn = connection ?: return false
+
+        try {
+            // Use MavEnumValue.fromValue() to create the command enum value
+            val commandEnum = MavEnumValue.fromValue<MavCmd>(commandId)
+
+            val commandLong = CommandLong(
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
+                command = commandEnum,
+                confirmation = 0u,
+                param1 = param1,
+                param2 = param2,
+                param3 = param3,
+                param4 = param4,
+                param5 = param5,
+                param6 = param6,
+                param7 = param7
+            )
+
+            conn.trySendUnsignedV2(gcsSystemId, gcsComponentId, commandLong)
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send command $commandId", e)
+            return false
+        }
+    }
+
+    /**
+     * Wait for COMMAND_ACK with timeout
+     */
+    suspend fun awaitCommandAck(commandId: UInt, timeoutMs: Long = 5000): CommandAck? {
+        return try {
+            withTimeoutOrNull(timeoutMs) {
+                commandAck
+                    .filter { it.command.value == commandId }
+                    .first()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error waiting for command ack", e)
+            null
+        }
+    }
+
+    /**
+     * Request message interval for MAG_CAL messages
+     */
+    suspend fun requestMagCalMessages(hz: Float = 10f) {
+        val intervalUs = (1_000_000f / hz).toInt()
+
+        // Request MAG_CAL_PROGRESS (message ID 191)
+        sendCommand(
+            commandId = 511u, // MAV_CMD_SET_MESSAGE_INTERVAL
+            param1 = 191f,    // MAG_CAL_PROGRESS
+            param2 = intervalUs.toFloat()
+        )
+
+        delay(50)
+
+        // Request MAG_CAL_REPORT (message ID 192)
+        sendCommand(
+            commandId = 511u, // MAV_CMD_SET_MESSAGE_INTERVAL
+            param1 = 192f,    // MAG_CAL_REPORT
+            param2 = intervalUs.toFloat()
+        )
+    }
+
+    /**
+     * Stop MAG_CAL message streaming
+     */
+    suspend fun stopMagCalMessages() {
+        // Stop MAG_CAL_PROGRESS (set interval to 0)
+        sendCommand(
+            commandId = 511u, // MAV_CMD_SET_MESSAGE_INTERVAL
+            param1 = 191f,    // MAG_CAL_PROGRESS
+            param2 = 0f       // Stop streaming
+        )
+
+        delay(50)
+
+        // Stop MAG_CAL_REPORT
+        sendCommand(
+            commandId = 511u, // MAV_CMD_SET_MESSAGE_INTERVAL
+            param1 = 192f,    // MAG_CAL_REPORT
+            param2 = 0f       // Stop streaming
+        )
+    }
+
+    /**
+     * Get or create the ParameterRepository instance
+     */
+    fun getParameterRepository(): ParameterRepository {
+        if (parameterRepository == null) {
+            val conn = connection ?: throw IllegalStateException("Not connected to vehicle")
+            parameterRepository = ParameterRepository(conn, scope)
+        }
+        return parameterRepository!!
     }
 }

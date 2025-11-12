@@ -26,9 +26,14 @@ fun ConfigurationsScreen(
     onNavigateToEscCalibration: () -> Unit = {},
     onNavigateToFrameType: () -> Unit = {},
     onNavigateToFlightModes: () -> Unit = {},
+    onNavigateToServoOutput: () -> Unit = {},
+    onNavigateToSerialPorts: () -> Unit = {},
     onNavigateToMotorTest: () -> Unit = {},
     onNavigateToFailsafe: () -> Unit = {},
-    onNavigateToBatteryMonitor: () -> Unit = {} // new battery monitor navigation callback
+    onNavigateToBatteryMonitor: () -> Unit = {},
+    onNavigateToCompassCalibration: () -> Unit = {},
+    onNavigateToRCCalibration: () -> Unit = {},
+    onNavigateToIMUCalibration: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -83,9 +88,14 @@ fun ConfigurationsScreen(
                                 "esc_calibration" -> onNavigateToEscCalibration()
                                 "frame_type" -> onNavigateToFrameType()
                                 "flight_modes" -> onNavigateToFlightModes()
+                                "servo_output" -> onNavigateToServoOutput()
+                                "serial_ports" -> onNavigateToSerialPorts()
                                 "motor_test" -> onNavigateToMotorTest()
                                 "failsafe" -> onNavigateToFailsafe()
                                 "battery_monitor" -> onNavigateToBatteryMonitor()
+                                "compass_calibration" -> onNavigateToCompassCalibration()
+                                "rc_calibration" -> onNavigateToRCCalibration()
+                                "imu_calibration" -> onNavigateToIMUCalibration()
                                 // Handle other routes here
                             }
                         }
@@ -143,9 +153,14 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("ESC Calibration", "esc_calibration"),
         ConfigurationItem("Frame Type", "frame_type"),
         ConfigurationItem("Flight Modes", "flight_modes"),
+        ConfigurationItem("Servo Output", "servo_output"),
+        ConfigurationItem("Serial Ports", "serial_ports"),
         ConfigurationItem("Motor Test", "motor_test"),
         ConfigurationItem("Failsafe", "failsafe"),
-        ConfigurationItem("Battery Monitor", "battery_monitor")
+        ConfigurationItem("Battery Monitor", "battery_monitor"),
+        ConfigurationItem("Compass Calibration", "compass_calibration"),
+        ConfigurationItem("RC Calibration", "rc_calibration"),
+        ConfigurationItem("IMU Calibration", "imu_calibration")
         // Add more items here as needed
     )
 }

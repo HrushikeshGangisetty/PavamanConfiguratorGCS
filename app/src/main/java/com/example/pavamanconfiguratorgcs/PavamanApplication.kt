@@ -1,6 +1,8 @@
 package com.example.pavamanconfiguratorgcs
 
 import android.app.Application
+import com.example.pavamanconfiguratorgcs.data.repository.ServoRepository
+import com.example.pavamanconfiguratorgcs.data.repository.SerialPortRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 
 class PavamanApplication : Application() {
@@ -8,5 +10,12 @@ class PavamanApplication : Application() {
     val telemetryRepository: TelemetryRepository by lazy {
         TelemetryRepository()
     }
-}
 
+    val servoRepository: ServoRepository by lazy {
+        ServoRepository(telemetryRepository)
+    }
+
+    val serialPortRepository: SerialPortRepository by lazy {
+        SerialPortRepository(telemetryRepository.getParameterRepository())
+    }
+}

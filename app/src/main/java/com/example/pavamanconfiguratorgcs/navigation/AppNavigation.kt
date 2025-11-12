@@ -9,7 +9,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.pavamanconfiguratorgcs.PavamanApplication
 import com.example.pavamanconfiguratorgcs.ui.SharedViewModel
-import com.example.pavamanconfiguratorgcs.ui.ViewModelFactory
 import com.example.pavamanconfiguratorgcs.ui.configurations.ConfigurationsScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.EscCalibrationViewModel
@@ -23,6 +22,8 @@ import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
 import com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorScreen
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 
 sealed class Screen(val route: String) {
     object Connection : Screen("connection")
@@ -32,9 +33,14 @@ sealed class Screen(val route: String) {
     object EscCalibration : Screen("esc_calibration")
     object FrameType : Screen("frame_type")
     object FlightModes : Screen("flight_modes")
+    object ServoOutput : Screen("servo_output")
+    object SerialPorts : Screen("serial_ports")
     object MotorTest : Screen("motor_test")
     object Failsafe : Screen("failsafe")
     object BatteryMonitor : Screen("battery_monitor")
+    object CompassCalibration : Screen("compass_calibration")
+    object RCCalibration : Screen("rc_calibration")
+    object IMUCalibration : Screen("imu_calibration")
 }
 
 @Composable
@@ -45,10 +51,28 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     // Create shared ViewModel with the repository from the Application
     val sharedViewModel: SharedViewModel = viewModel(
-        factory = ViewModelFactory(application.telemetryRepository)
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return SharedViewModel(application.telemetryRepository) as T
+            }
+        }
     )
 
     val telemetryRepository = sharedViewModel.getTelemetryRepository()
+
+    // Create app-scoped ParametersViewModel - created once and reused
+    val parametersViewModel: ParametersViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return ParametersViewModel(telemetryRepository) as T
+            }
+        }
+    )
+
+    // Read FCU detection state from the shared view model
+    val fcuDetected by sharedViewModel.fcuDetected.collectAsState(initial = false)
 
     NavHost(
         navController = navController,
@@ -116,6 +140,12 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateToFlightModes = {
                     navController.navigate(Screen.FlightModes.route)
                 },
+                onNavigateToServoOutput = {
+                    navController.navigate(Screen.ServoOutput.route)
+                },
+                onNavigateToSerialPorts = {
+                    navController.navigate(Screen.SerialPorts.route)
+                },
                 onNavigateToMotorTest = {
                     navController.navigate(Screen.MotorTest.route)
                 },
@@ -124,21 +154,21 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToBatteryMonitor = {
                     navController.navigate(Screen.BatteryMonitor.route)
+                },
+                onNavigateToCompassCalibration = {
+                    navController.navigate(Screen.CompassCalibration.route)
+                },
+                onNavigateToRCCalibration = {
+                    navController.navigate(Screen.RCCalibration.route)
+                },
+                onNavigateToIMUCalibration = {
+                    navController.navigate(Screen.IMUCalibration.route)
                 }
             )
         }
 
         composable(Screen.FullParams.route) {
-            // Create ParametersViewModel with the shared TelemetryRepository
-            val parametersViewModel: ParametersViewModel = viewModel(
-                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return ParametersViewModel(telemetryRepository) as T
-                    }
-                }
-            )
-
+            // Use app-scoped ParametersViewModel - no recreation on each navigation
             ParametersScreen(
                 viewModel = parametersViewModel,
                 onNavigateBack = { navController.popBackStack() }
@@ -172,7 +202,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                         val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
-                        return com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeViewModel(telemetryRepository, parameterRepository) as T
+                        val frameTypeRepository = com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository(parameterRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeViewModel(frameTypeRepository) as T
                     }
                 }
             )
@@ -182,7 +213,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 viewModel = frameTypeViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
-                }
+                },
+                fcuDetected = fcuDetected
             )
         }
 
@@ -200,6 +232,48 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             FlightModesScreen(
                 viewModel = flightModesViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.ServoOutput.route) {
+            // Create ServoOutputViewModel with dependencies
+            val servoOutputViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel(application.servoRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputScreen(
+                viewModel = servoOutputViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.SerialPorts.route) {
+            // Create SerialPortsViewModel with dependencies
+            val serialPortsViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsViewModel(
+                            parameterRepository,
+                            application.serialPortRepository
+                        ) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.SerialPortsScreen(
+                viewModel = serialPortsViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -242,6 +316,64 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
         composable(Screen.BatteryMonitor.route) {
             BatteryMonitorScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.CompassCalibration.route) {
+            // Create CompassCalibrationViewModel with dependencies
+            val compassCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationViewModel(telemetryRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationScreen(
+                viewModel = compassCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.RCCalibration.route) {
+            // Create RC Calibration ViewModel with dependencies
+            val rcCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationViewModel(telemetryRepository, parameterRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.RCCalibrationScreen(
+                viewModel = rcCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.IMUCalibration.route) {
+            // Create IMU Calibration ViewModel with dependencies
+            val imuCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.IMUCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.IMUCalibrationViewModel(telemetryRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.IMUCalibrationScreen(
+                viewModel = imuCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

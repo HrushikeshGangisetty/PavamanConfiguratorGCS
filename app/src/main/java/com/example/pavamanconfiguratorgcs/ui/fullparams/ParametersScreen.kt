@@ -35,10 +35,8 @@ fun ParametersScreen(
     var showDiscardDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Auto-load parameters when screen opens
-    LaunchedEffect(Unit) {
-        viewModel.fetchParameters()
-    }
+    // No longer auto-fetching on screen open - parameters are loaded once at app scope
+    // User can manually refresh using the refresh button if needed
 
     LaunchedEffect(editState) {
         when (val state = editState) {
