@@ -34,6 +34,9 @@ fun FrameTypeScreen(
     // Detect frame parameters when screen opens or when FCU is detected
     LaunchedEffect(fcuDetected) {
         if (fcuDetected) {
+            // Clear any stale errors or messages from previous runs
+            viewModel.clearError()
+            viewModel.clearMessage()
             viewModel.detectFrameParameters()
         }
     }
@@ -192,24 +195,26 @@ fun FrameTypeScreen(
                 }
             }
 
-            // Error Message
-            error?.let { errorMsg ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            // Error Message (only show when frame parameters are not detected)
+            if (!frameConfig.isDetected) {
+                error?.let { errorMsg ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text(
-                            text = "❌ Error: $errorMsg",
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = { viewModel.clearError() }) {
-                            Text("Dismiss", color = Color.White)
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "❌ Error: $errorMsg",
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { viewModel.clearError() }) {
+                                Text("Dismiss", color = Color.White)
+                            }
                         }
                     }
                 }
