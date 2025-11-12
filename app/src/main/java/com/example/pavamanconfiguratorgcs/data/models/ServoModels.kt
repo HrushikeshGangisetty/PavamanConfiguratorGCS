@@ -45,6 +45,24 @@ enum class ServoFunction(val displayName: String, val isMotor: Boolean = false) 
     GIMBAL_YAW("Gimbal Yaw", false),
     PARACHUTE("Parachute", false);
 
+    /**
+     * Convert ServoFunction to ArduPilot parameter value
+     */
+    fun toParameterValue(): Int {
+        return when (this) {
+            DISABLED -> 0
+            MOTOR1 -> 33
+            MOTOR2 -> 34
+            MOTOR3 -> 35
+            MOTOR4 -> 36
+            MOTOR5 -> 37
+            MOTOR6 -> 38
+            MOTOR7 -> 39
+            MOTOR8 -> 40
+            else -> 0  // Default for other functions
+        }
+    }
+
     companion object {
         fun fromIndex(index: Int): ServoFunction {
             return when (index) {
