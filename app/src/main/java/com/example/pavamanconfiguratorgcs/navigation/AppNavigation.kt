@@ -34,6 +34,7 @@ sealed class Screen(val route: String) {
     object ServoOutput : Screen("servo_output")
     object SerialPorts : Screen("serial_ports")
     object MotorTest : Screen("motor_test")
+    object CompassCalibration : Screen("compass_calibration")
 }
 
 @Composable
@@ -141,6 +142,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToMotorTest = {
                     navController.navigate(Screen.MotorTest.route)
+                },
+                onNavigateToCompassCalibration = {
+                    navController.navigate(Screen.CompassCalibration.route)
                 }
             )
         }
@@ -277,6 +281,24 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 }
             )
         }
+
+        composable(Screen.CompassCalibration.route) {
+            // Create CompassCalibrationViewModel with dependencies
+            val compassCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationViewModel(telemetryRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationScreen(
+                viewModel = compassCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
-

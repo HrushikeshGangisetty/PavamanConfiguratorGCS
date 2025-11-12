@@ -7,6 +7,7 @@ import com.example.pavamanconfiguratorgcs.PavamanApplication
 import com.example.pavamanconfiguratorgcs.data.repository.ServoRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import com.example.pavamanconfiguratorgcs.ui.configurations.ServoOutputViewModel
+import com.example.pavamanconfiguratorgcs.ui.configurations.CompassCalibrationViewModel
 
 class ViewModelFactory(
     private val telemetryRepository: TelemetryRepository,
@@ -20,6 +21,9 @@ class ViewModelFactory(
             }
             modelClass.isAssignableFrom(ServoOutputViewModel::class.java) -> {
                 ServoOutputViewModel(servoRepository) as T
+            }
+            modelClass.isAssignableFrom(CompassCalibrationViewModel::class.java) -> {
+                CompassCalibrationViewModel(telemetryRepository) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
