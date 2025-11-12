@@ -1,0 +1,1 @@
+package com.example.pavamanconfiguratorgcs.ui.configurations

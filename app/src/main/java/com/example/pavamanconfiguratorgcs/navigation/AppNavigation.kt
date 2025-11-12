@@ -41,6 +41,7 @@ sealed class Screen(val route: String) {
     object CompassCalibration : Screen("compass_calibration")
     object RCCalibration : Screen("rc_calibration")
     object IMUCalibration : Screen("imu_calibration")
+    object HWID : Screen("hwid")
 }
 
 @Composable
@@ -163,6 +164,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToIMUCalibration = {
                     navController.navigate(Screen.IMUCalibration.route)
+                },
+                onNavigateToHWID = {
+                    navController.navigate(Screen.HWID.route)
                 }
             )
         }
@@ -373,6 +377,22 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 onNavigateBack = {
                     navController.popBackStack()
                 }
+            )
+        }
+
+        composable(Screen.HWID.route) {
+            // Create HWIDViewModel using a small factory and show HWIDScreen
+            val hwidViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel() as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.HWIDScreen(
+                viewModel = hwidViewModel
             )
         }
     }
