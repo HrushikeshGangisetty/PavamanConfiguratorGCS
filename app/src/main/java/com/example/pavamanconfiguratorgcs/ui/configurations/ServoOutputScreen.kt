@@ -343,49 +343,60 @@ fun NumberSpinner(
 ) {
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Up button
-        IconButton(
+        Button(
             onClick = {
                 val newValue = (value + step).coerceIn(range)
                 if (newValue != value) onValueChange(newValue)
             },
             modifier = Modifier
-                .size(24.dp)
-                .background(Color(0xFF444444), RoundedCornerShape(4.dp))
+                .width(50.dp)
+                .height(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF444444)
+            ),
+            shape = RoundedCornerShape(6.dp),
+            contentPadding = PaddingValues(0.dp)
         ) {
-            Text("▲", color = Color.White, fontSize = 10.sp)
+            Text("▲", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
         // Value display
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(28.dp)
-                .background(Color(0xFF2A2A28), RoundedCornerShape(4.dp))
-                .border(1.dp, Color(0xFF444444), RoundedCornerShape(4.dp)),
+                .height(36.dp)
+                .background(Color(0xFF2A2A28), RoundedCornerShape(6.dp))
+                .border(1.dp, Color(0xFF444444), RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = value.toString(),
                 color = Color.White,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold
             )
         }
 
         // Down button
-        IconButton(
+        Button(
             onClick = {
                 val newValue = (value - step).coerceIn(range)
                 if (newValue != value) onValueChange(newValue)
             },
             modifier = Modifier
-                .size(24.dp)
-                .background(Color(0xFF444444), RoundedCornerShape(4.dp))
+                .width(50.dp)
+                .height(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF444444)
+            ),
+            shape = RoundedCornerShape(6.dp),
+            contentPadding = PaddingValues(0.dp)
         ) {
-            Text("▼", color = Color.White, fontSize = 10.sp)
+            Text("▼", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

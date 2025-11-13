@@ -66,6 +66,25 @@ class FrameTypeViewModel(
         initialValue = null
     )
 
+    init {
+        // Observe repository frameConfig changes so the UI updates even if detection occurred earlier
+        viewModelScope.launch {
+            frameTypeRepository.frameConfig.collect { config ->
+                if (config.isValid) {
+                    val message = "Frame type detected: ${config.currentFrameType?.displayName}"
+                    _uiMessage.value = message
+                    Log.i(TAG, "$message (from collector)")
+                    // Clear repository error if any
+                    frameTypeRepository.clearError()
+                } else {
+                    // If not detected and repository has set an error, reflect nothing here — UI will show repo.error
+                    // Keep _uiMessage null to avoid stale success message
+                    _uiMessage.value = null
+                }
+            }
+        }
+    }
+
     /**
      * Detect frame parameters from the vehicle
      * Call this after parameters are loaded

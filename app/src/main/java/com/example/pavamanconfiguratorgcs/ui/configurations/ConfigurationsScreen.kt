@@ -33,8 +33,7 @@ fun ConfigurationsScreen(
     onNavigateToBatteryMonitor: () -> Unit = {},
     onNavigateToCompassCalibration: () -> Unit = {},
     onNavigateToRCCalibration: () -> Unit = {},
-    onNavigateToIMUCalibration: () -> Unit = {},
-    onNavigateToBarometerCalibration: () -> Unit = {}
+    onNavigateToIMUCalibration: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -97,7 +96,6 @@ fun ConfigurationsScreen(
                                 "compass_calibration" -> onNavigateToCompassCalibration()
                                 "rc_calibration" -> onNavigateToRCCalibration()
                                 "imu_calibration" -> onNavigateToIMUCalibration()
-                                "barometer_calibration" -> onNavigateToBarometerCalibration()
                                 // Handle other routes here
                             }
                         }
@@ -162,8 +160,7 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("Battery Monitor", "battery_monitor"),
         ConfigurationItem("Compass Calibration", "compass_calibration"),
         ConfigurationItem("RC Calibration", "rc_calibration"),
-        ConfigurationItem("IMU Calibration", "imu_calibration"),
-        ConfigurationItem("Barometer Calibration", "barometer_calibration")
+        ConfigurationItem("IMU Calibration", "imu_calibration")
         // Add more items here as needed
     )
 }

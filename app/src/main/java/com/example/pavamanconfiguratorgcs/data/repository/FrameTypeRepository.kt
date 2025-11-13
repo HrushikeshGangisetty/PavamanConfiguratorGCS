@@ -155,6 +155,9 @@ class FrameTypeRepository(
 
             _frameConfig.value = config
 
+            // Clear any previous errors on successful detection
+            _error.value = null
+
             if (config.isValid) {
                 Log.i(TAG, "✅ Frame detection complete: ${config.currentFrameType?.displayName}")
             }
@@ -203,6 +206,8 @@ class FrameTypeRepository(
                     when (result) {
                         is ParameterRepository.ParameterResult.Success -> {
                             Log.i(TAG, "✅ FRAME parameter set to $frameValue")
+                            // Clear any previous error state
+                            _error.value = null
                             updateFrameConfig(newFrameType, rebootRequired = true)
                             Result.success(Unit)
                         }
@@ -255,6 +260,8 @@ class FrameTypeRepository(
                     when (typeResult) {
                         is ParameterRepository.ParameterResult.Success -> {
                             Log.i(TAG, "✅ FRAME_TYPE set to ${values.frameType}")
+                            // Clear any previous error state
+                            _error.value = null
                             updateFrameConfig(newFrameType, rebootRequired = true)
                             Result.success(Unit)
                         }

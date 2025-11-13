@@ -19,8 +19,10 @@ class ParameterRepository(
     companion object {
         private const val TAG = "ParameterRepository"
         // Increase default timeout to be robust on slower links
-        private const val PARAM_TIMEOUT_MS = 2000L
-        private const val MAX_RETRIES = 3
+        // Increased to 6000ms to allow slower links and firmwares more time to echo PARAM_VALUE
+        private const val PARAM_TIMEOUT_MS = 6000L
+        // Increase retries to handle flaky links
+        private const val MAX_RETRIES = 5
         // When setting multiple params give the FCU a little time to apply
         private const val BETWEEN_PARAM_DELAY_MS = 200L
     }
@@ -40,7 +42,9 @@ class ParameterRepository(
         val name: String,
         val value: Float,
         val type: MavParamType,
-        val index: Int = -1
+        val index: Int = -1,
+        // component id where this PARAM_VALUE was observed (helps target writes)
+        val component: Int = -1
     )
 
     sealed class ParameterResult {
@@ -105,9 +109,12 @@ class ParameterRepository(
         // Prepare parameter ID (max 16 characters). Pad/truncate to be consistent.
         val paramIdForMessage = paramId16.padEnd(16, '\u0000')
 
+        // If we have a cached param and it recorded a component that sent PARAM_VALUEs, target that component.
+        val targetComponentToUse = currentParam?.component?.toUByte() ?: telemetryRepository.fcuComponentId
+
         val paramSet = ParamSet(
             targetSystem = telemetryRepository.fcuSystemId,
-            targetComponent = telemetryRepository.fcuComponentId,
+            targetComponent = targetComponentToUse,
             paramId = paramIdForMessage,
             paramValue = value,
             paramType = effectiveParamType.wrap()
@@ -171,6 +178,61 @@ class ParameterRepository(
         }
 
         Log.e(TAG, "Failed to set parameter $paramName after $MAX_RETRIES attempts")
+
+        // Final fallback: refresh the full parameter cache and check if FCU applied the value
+        try {
+            Log.d(TAG, "Attempting final cache refresh to check for eventual application of $paramName")
+            val refreshed = requestAllParameters(timeoutMs = 5000L)
+            val cached = refreshed[paramId16] ?: _parameters.value[paramId16]
+            if (cached != null && floatEquals(cached.value, value)) {
+                Log.i(TAG, "Parameter $paramName appears applied after cache refresh: ${cached.value}")
+                return@withContext ParameterResult.Success(cached)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Final cache refresh for $paramName failed: ${e.message}")
+        }
+
+        // Last-ditch attempt: send one final PARAM_SET and wait longer for an echo
+        try {
+            Log.d(TAG, "Performing a last-ditch PARAM_SET for $paramName and waiting up to 8s for echo")
+            connection.trySendUnsignedV2(
+                systemId = telemetryRepository.gcsSystemId,
+                componentId = telemetryRepository.gcsComponentId,
+                payload = paramSet
+            )
+            val finalRes = waitForParameterEcho(paramId16, 8000L)
+            if (finalRes is ParameterResult.Success) {
+                Log.i(TAG, "Last-ditch PARAM_SET succeeded for $paramName")
+                return@withContext finalRes
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Last-ditch PARAM_SET for $paramName failed: ${e.message}")
+        }
+
+        // Broadcast attempt: send PARAM_SET with targetComponent=0 in case a different component handles param writes
+        try {
+            Log.d(TAG, "Attempting broadcast PARAM_SET (component=0) for $paramName and waiting up to 8s for echo")
+            val broadcastParamSet = ParamSet(
+                targetSystem = telemetryRepository.fcuSystemId,
+                targetComponent = 0.toUByte(),
+                paramId = paramIdForMessage,
+                paramValue = value,
+                paramType = effectiveParamType.wrap()
+            )
+            connection.trySendUnsignedV2(
+                systemId = telemetryRepository.gcsSystemId,
+                componentId = telemetryRepository.gcsComponentId,
+                payload = broadcastParamSet
+            )
+            val bcRes = waitForParameterEcho(paramId16, 8000L)
+            if (bcRes is ParameterResult.Success) {
+                Log.i(TAG, "Broadcast PARAM_SET succeeded for $paramName")
+                return@withContext bcRes
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Broadcast PARAM_SET for $paramName failed: ${e.message}")
+        }
+
         result
     }
 
@@ -188,19 +250,22 @@ class ParameterRepository(
 
         telemetryRepository.mavFrame
             .filter { frame ->
+                // Only require the system id to match the FCU. Some firmwares/components reply from a
+                // different component id than the one we target; requiring componentId equality can
+                // cause us to miss valid PARAM_VALUE echoes. Matching by systemId (and paramId)
+                // is robust while still targeted to the vehicle.
                 frame.message is ParamValue &&
-                frame.systemId == telemetryRepository.fcuSystemId &&
-                frame.componentId == telemetryRepository.fcuComponentId
+                frame.systemId == telemetryRepository.fcuSystemId
             }
-            .map { it.message as ParamValue }
-            .filter { paramValue ->
-                // Normalize received id and compare using flexible matching
+            .map { frame -> frame } // keep frame so we can capture componentId
+            .filter { frame ->
+                val paramValue = frame.message as ParamValue
                 val recv = paramValue.paramId.replace("\u0000", "").trim().uppercase()
-                // Accept exact match, startsWith either way, or contains
                 recv == expected || recv.startsWith(expected) || expected.startsWith(recv) || recv.contains(expected) || expected.contains(recv)
             }
             .first()
-            .let { paramValue ->
+            .let { frame ->
+                val paramValue = frame.message as ParamValue
                 // Extract the type value from the MavEnumValue
                 val typeValue = paramValue.paramType.value.toInt()
                 val paramTypeEnum = MavParamType.entries.find { it.value.toInt() == typeValue }
@@ -213,13 +278,14 @@ class ParameterRepository(
                     name = recvName,
                     value = paramValue.paramValue,
                     type = paramTypeEnum,
-                    index = paramValue.paramIndex.toInt()
+                    index = paramValue.paramIndex.toInt(),
+                    component = frame.componentId.toInt()
                 )
 
                 // Update local cache with normalized key
                 _parameters.update { it + (recvName to parameter) }
 
-                Log.d(TAG, "Received PARAM_VALUE: ${recvName} = ${paramValue.paramValue}")
+                Log.d(TAG, "Received PARAM_VALUE: ${recvName} = ${paramValue.paramValue} (component=${frame.componentId})")
                 ParameterResult.Success(parameter)
             }
     } ?: ParameterResult.Timeout
@@ -292,12 +358,14 @@ class ParameterRepository(
             withTimeoutOrNull(timeoutMs) {
                 telemetryRepository.mavFrame
                     .filter { frame ->
+                        // Match by systemId only to avoid missing ParamValue frames originating from
+                        // different component IDs on the vehicle.
                         frame.message is ParamValue &&
-                        frame.systemId == telemetryRepository.fcuSystemId &&
-                        frame.componentId == telemetryRepository.fcuComponentId
+                        frame.systemId == telemetryRepository.fcuSystemId
                     }
-                    .map { it.message as ParamValue }
-                    .collect { paramValue ->
+                    .map { frame -> frame }
+                    .collect { frame ->
+                        val paramValue = frame.message as ParamValue
                         val typeValue = paramValue.paramType.value.toInt()
                         val paramTypeEnum = MavParamType.entries.find { it.value.toInt() == typeValue }
                             ?: MavParamType.REAL32
@@ -309,7 +377,8 @@ class ParameterRepository(
                             name = recvName,
                             value = paramValue.paramValue,
                             type = paramTypeEnum,
-                            index = paramValue.paramIndex.toInt()
+                            index = paramValue.paramIndex.toInt(),
+                            component = frame.componentId.toInt()
                         )
 
                         received[recvName] = parameter
@@ -317,7 +386,7 @@ class ParameterRepository(
                         // Update local cache incrementally
                         _parameters.update { it + (recvName to parameter) }
 
-                        Log.d(TAG, "Received PARAM_VALUE (all): ${recvName} = ${paramValue.paramValue}")
+                        Log.d(TAG, "Received PARAM_VALUE (all): ${recvName} = ${paramValue.paramValue} (component=${frame.componentId})")
                      }
             }
 
@@ -466,15 +535,18 @@ class ParameterRepository(
             val found = mutableMapOf<String, ParameterValue>()
 
             withTimeoutOrNull(timeoutMs) {
+                // Match by systemId only to avoid missing ParamValue frames originating from
+                // different component IDs on the vehicle.
                 telemetryRepository.mavFrame
-                    .filter { frame -> frame.message is ParamValue && frame.systemId == telemetryRepository.fcuSystemId && frame.componentId == telemetryRepository.fcuComponentId }
-                    .map { it.message as ParamValue }
-                    .collect { paramValue ->
+                    .filter { frame -> frame.message is ParamValue && frame.systemId == telemetryRepository.fcuSystemId }
+                    .map { frame -> frame }
+                    .collect { frame ->
+                        val paramValue = frame.message as ParamValue
                         val recvName = paramValue.paramId.replace("\u0000", "").trim().uppercase().take(16)
                         if (recvName.startsWith(normPrefix) || recvName.contains(normPrefix)) {
                             val typeValue = paramValue.paramType.value.toInt()
                             val paramTypeEnum = MavParamType.entries.find { it.value.toInt() == typeValue } ?: MavParamType.REAL32
-                            val pv = ParameterValue(name = recvName, value = paramValue.paramValue, type = paramTypeEnum, index = paramValue.paramIndex.toInt())
+                            val pv = ParameterValue(name = recvName, value = paramValue.paramValue, type = paramTypeEnum, index = paramValue.paramIndex.toInt(), component = frame.componentId.toInt())
                             found[recvName] = pv
                         }
                     }

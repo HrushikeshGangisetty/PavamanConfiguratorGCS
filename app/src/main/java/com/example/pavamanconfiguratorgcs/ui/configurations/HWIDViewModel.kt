@@ -1,0 +1,201 @@
+package com.example.pavamanconfiguratorgcs.ui.configurations
+
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.pavamanconfiguratorgcs.data.models.Parameter
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * Detailed device information model for HWID screen
+ */
+data class DeviceInfoDetailed(
+    val paramName: String,
+    // Expose device id as a decimal string to guarantee base-10 display in the UI
+    val deviceId: String,
+    val busType: String,
+    val busAddress: String
+)
+
+class HWIDViewModel(
+    private val parameterRepository: ParameterRepository
+) : ViewModel() {
+
+    companion object {
+        private const val TAG = "HWIDViewModel"
+    }
+
+    private val _devices = MutableStateFlow<List<DeviceInfoDetailed>>(emptyList())
+    val devices: StateFlow<List<DeviceInfoDetailed>> = _devices.asStateFlow()
+
+    // Expose repository loading progress so UI can show counts/progress and errors
+    val loadingProgress: StateFlow<ParameterRepository.LoadingProgress> = parameterRepository.loadingProgress
+
+    init {
+        // Observe parameter map and update devices when parameters change
+        viewModelScope.launch {
+            parameterRepository.parameters.collect { params ->
+                try {
+                    val processed = processParameters(params)
+                    _devices.value = processed
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing parameters for HWID", e)
+                }
+            }
+        }
+
+        // Trigger an initial parameter fetch (non-blocking)
+        refreshParameters()
+    }
+
+    /** Public: request fresh parameters from vehicle */
+    fun refreshParameters() {
+        viewModelScope.launch {
+            try {
+                parameterRepository.requestAllParameters()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to request parameters", e)
+            }
+        }
+    }
+
+    /** Convenience: if loading is incomplete, attempt a re-request */
+    fun retryIfIncomplete() {
+        val lp = loadingProgress.value
+        if (!lp.isComplete) {
+            refreshParameters()
+        }
+    }
+
+    /** Convert raw Parameter map into sorted DeviceInfoDetailed list */
+    private fun processParameters(params: Map<String, Parameter>): List<DeviceInfoDetailed> {
+        // Filtering rules - be generous and case-insensitive to catch different naming conventions
+        val filtered = params.values
+            .filter { p ->
+                val nameUpper = p.name.uppercase()
+                val hasId = nameUpper.contains("_ID") || nameUpper.contains("_DEVID") || nameUpper.contains("DEVICEID") || nameUpper.contains("UID") || nameUpper.endsWith("ID")
+                val excluded = nameUpper.contains("_IDX") || nameUpper.contains("FRSKY")
+                hasId && !excluded
+            }
+
+        val mapped = filtered.mapNotNull { p ->
+            try {
+                val rawUInt = parseParamToUInt(p)
+
+                val busType = decodeBusType(rawUInt, p.name)
+                val busAddress = decodeBusAddress(rawUInt, p.name)
+
+                // Log decimal device id for debugging so we can confirm ViewModel produces base-10 strings at runtime
+                Log.d(TAG, "HWID param ${p.name} -> decimal deviceId=${rawUInt.toString()}")
+
+                DeviceInfoDetailed(
+                    paramName = p.name,
+                    // ensure decimal (base 10) device id string
+                    deviceId = rawUInt.toString(),
+                    busType = busType,
+                    busAddress = busAddress
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Skipping param ${p.name} due to parsing error: ${e.message}")
+                null
+            }
+        }
+
+        return mapped.sortedBy { it.paramName }
+    }
+
+    // Parse Parameter into a 32-bit unsigned integer robustly.
+    // Accepts decimal strings, hex strings prefixed with 0x, or falls back to numeric Parameter.value.
+    private fun parseParamToUInt(p: Parameter): UInt {
+        // Try the formatted string first (this covers code-paths that may have preserved hex text)
+        val s = try {
+            p.getValueAsString().trim()
+        } catch (_: Exception) {
+            ""
+        }
+
+        if (s.isNotEmpty()) {
+            try {
+                if (s.startsWith("0x", true)) {
+                    // parse hex (allow large values)
+                    val hex = s.substring(2)
+                    return hex.toULong(16).toUInt()
+                }
+
+                // plain decimal string
+                val dec = s.toLongOrNull()
+                if (dec != null) return dec.toUInt()
+            } catch (e: Exception) {
+                Log.w(TAG, "parseParamToUInt: failed to parse string '$s' for ${p.name}: ${e.message}")
+            }
+        }
+
+        // Fallback to numeric float value stored in Parameter
+        return try {
+            p.value.toLong().toUInt()
+        } catch (e: Exception) {
+            Log.w(TAG, "parseParamToUInt fallback also failed for ${p.name}: ${e.message}")
+            0u
+        }
+    }
+
+    // Decode bus type using common ArduPilot-style encoding (bits 16-23)
+    private fun decodeBusType(rawId: UInt, paramName: String): String {
+        val busId = (rawId shr 16) and 0xFFu
+        val mapped = when (busId) {
+            0u -> "None"
+            1u -> "I2C"
+            2u -> "SPI"
+            3u -> "CAN"
+            4u -> "UART"
+            else -> "Unknown ($busId)"
+        }
+
+        // Heuristic fallback: sometimes bus type isn't encoded, infer from parameter name
+        if (mapped.startsWith("Unknown")) {
+            val nameUpper = paramName.uppercase()
+            return when {
+                "I2C" in nameUpper -> "I2C"
+                "SPI" in nameUpper -> "SPI"
+                "CAN" in nameUpper -> "CAN"
+                "UART" in nameUpper || "SERIAL" in nameUpper -> "UART"
+                else -> mapped
+            }
+        }
+
+        return mapped
+    }
+
+    // Decode bus address using common encoding (bits 0-7)
+    private fun decodeBusAddress(rawId: UInt, paramName: String): String {
+        val address = rawId and 0xFFu
+        return if (address > 0u) {
+            // Return decimal representation (base 10) instead of hex
+            address.toString()
+        } else {
+            // Heuristic: some params encode address in upper bytes or in the parameter name
+            val nameUpper = paramName.uppercase()
+            val addrFromName = "".let {
+                // try to extract trailing digits
+                val digits = Regex("(\\d+)").find(nameUpper)?.value
+                digits
+            }
+
+            if (!addrFromName.isNullOrEmpty()) {
+                try {
+                    val v = addrFromName.toInt()
+                    // return decimal digits
+                    v.toString()
+                } catch (_: Exception) {
+                    "N/A"
+                }
+            } else {
+                "N/A"
+            }
+        }
+    }
+}

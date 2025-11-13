@@ -53,18 +53,32 @@ class ServoOutputViewModel(
      * Update servo function for a channel
      */
     fun updateChannelFunction(channelIndex: Int, function: ServoFunction) {
-        // This would typically send a PARAM_SET command
-        // For now, just log it
-        Log.d(TAG, "Update channel $channelIndex function to ${function.displayName}")
-        // TODO: Implement PARAM_SET command
+        viewModelScope.launch {
+            Log.d(TAG, "Update channel $channelIndex function to ${function.displayName}")
+            val result = servoRepository.setServoFunction(channelIndex, function)
+            result.onFailure { error ->
+                _uiMessage.value = "Failed to update function: ${error.message}"
+                Log.e(TAG, "Failed to update function", error)
+            }.onSuccess {
+                _uiMessage.value = "Function updated successfully"
+            }
+        }
     }
 
     /**
      * Update reverse setting for a channel
      */
     fun updateChannelReverse(channelIndex: Int, reversed: Boolean) {
-        Log.d(TAG, "Update channel $channelIndex reverse to $reversed")
-        // TODO: Implement PARAM_SET command
+        viewModelScope.launch {
+            Log.d(TAG, "Update channel $channelIndex reverse to $reversed")
+            val result = servoRepository.setServoReverse(channelIndex, reversed)
+            result.onFailure { error ->
+                _uiMessage.value = "Failed to update reverse: ${error.message}"
+                Log.e(TAG, "Failed to update reverse", error)
+            }.onSuccess {
+                _uiMessage.value = "Reverse setting updated"
+            }
+        }
     }
 
     /**
@@ -75,8 +89,16 @@ class ServoOutputViewModel(
             _uiMessage.value = "Invalid PWM value: $minPwm"
             return
         }
-        Log.d(TAG, "Update channel $channelIndex min to $minPwm")
-        // TODO: Implement PARAM_SET command
+        viewModelScope.launch {
+            Log.d(TAG, "Update channel $channelIndex min to $minPwm")
+            val result = servoRepository.setServoMin(channelIndex, minPwm)
+            result.onFailure { error ->
+                _uiMessage.value = "Failed to update min PWM: ${error.message}"
+                Log.e(TAG, "Failed to update min PWM", error)
+            }.onSuccess {
+                _uiMessage.value = "Min PWM updated to $minPwm"
+            }
+        }
     }
 
     /**
@@ -87,8 +109,16 @@ class ServoOutputViewModel(
             _uiMessage.value = "Invalid PWM value: $trimPwm"
             return
         }
-        Log.d(TAG, "Update channel $channelIndex trim to $trimPwm")
-        // TODO: Implement PARAM_SET command
+        viewModelScope.launch {
+            Log.d(TAG, "Update channel $channelIndex trim to $trimPwm")
+            val result = servoRepository.setServoTrim(channelIndex, trimPwm)
+            result.onFailure { error ->
+                _uiMessage.value = "Failed to update trim PWM: ${error.message}"
+                Log.e(TAG, "Failed to update trim PWM", error)
+            }.onSuccess {
+                _uiMessage.value = "Trim PWM updated to $trimPwm"
+            }
+        }
     }
 
     /**
@@ -99,8 +129,16 @@ class ServoOutputViewModel(
             _uiMessage.value = "Invalid PWM value: $maxPwm"
             return
         }
-        Log.d(TAG, "Update channel $channelIndex max to $maxPwm")
-        // TODO: Implement PARAM_SET command
+        viewModelScope.launch {
+            Log.d(TAG, "Update channel $channelIndex max to $maxPwm")
+            val result = servoRepository.setServoMax(channelIndex, maxPwm)
+            result.onFailure { error ->
+                _uiMessage.value = "Failed to update max PWM: ${error.message}"
+                Log.e(TAG, "Failed to update max PWM", error)
+            }.onSuccess {
+                _uiMessage.value = "Max PWM updated to $maxPwm"
+            }
+        }
     }
 
     /**
@@ -157,4 +195,3 @@ class ServoOutputViewModel(
         }
     }
 }
-

@@ -361,4 +361,100 @@ class ServoRepository(
     fun canSendServoCommands(): Boolean {
         return !_vehicleState.value.isArmed
     }
+
+    /**
+     * Set a parameter value on the flight controller
+     */
+    suspend fun setParameter(paramId: String, value: Float): Result<Unit> {
+        return try {
+            val connection = telemetryRepository.connection
+                ?: return Result.failure(IllegalStateException("No MAVLink connection"))
+
+            Log.d(TAG, "🔧 Attempting to set parameter: $paramId = $value")
+
+            val paramSet = ParamSet(
+                targetSystem = telemetryRepository.fcuSystemId,
+                targetComponent = telemetryRepository.fcuComponentId,
+                paramId = paramId,
+                paramValue = value,
+                paramType = MavEnumValue.of(MavParamType.REAL32)
+            )
+
+            Log.d(TAG, "📤 Sending PARAM_SET - Target: ${telemetryRepository.fcuSystemId}/${telemetryRepository.fcuComponentId}")
+            Log.d(TAG, "📤 From GCS: ${telemetryRepository.gcsSystemId}/${telemetryRepository.gcsComponentId}")
+
+            connection.sendUnsignedV2(
+                systemId = telemetryRepository.gcsSystemId,
+                componentId = telemetryRepository.gcsComponentId,
+                payload = paramSet
+            )
+
+            Log.d(TAG, "✅ PARAM_SET sent successfully: $paramId = $value")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Failed to set parameter $paramId = $value", e)
+            Log.e(TAG, "Error details: ${e.message}")
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Set servo function for a channel
+     */
+    suspend fun setServoFunction(channelIndex: Int, function: ServoFunction): Result<Unit> {
+        if (channelIndex !in 1..MAX_CHANNELS) {
+            return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
+        }
+        return setParameter("SERVO${channelIndex}_FUNCTION", function.toParameterValue().toFloat())
+    }
+
+    /**
+     * Set servo reverse for a channel
+     */
+    suspend fun setServoReverse(channelIndex: Int, reversed: Boolean): Result<Unit> {
+        if (channelIndex !in 1..MAX_CHANNELS) {
+            return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
+        }
+        return setParameter("SERVO${channelIndex}_REVERSED", if (reversed) 1f else 0f)
+    }
+
+    /**
+     * Set servo min PWM for a channel
+     */
+    suspend fun setServoMin(channelIndex: Int, minPwm: Int): Result<Unit> {
+        if (channelIndex !in 1..MAX_CHANNELS) {
+            return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
+        }
+        if (minPwm !in 800..2200) {
+            return Result.failure(IllegalArgumentException("Invalid PWM: $minPwm"))
+        }
+        return setParameter("SERVO${channelIndex}_MIN", minPwm.toFloat())
+    }
+
+    /**
+     * Set servo trim PWM for a channel
+     */
+    suspend fun setServoTrim(channelIndex: Int, trimPwm: Int): Result<Unit> {
+        if (channelIndex !in 1..MAX_CHANNELS) {
+            return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
+        }
+        if (trimPwm !in 800..2200) {
+            return Result.failure(IllegalArgumentException("Invalid PWM: $trimPwm"))
+        }
+        return setParameter("SERVO${channelIndex}_TRIM", trimPwm.toFloat())
+    }
+
+    /**
+     * Set servo max PWM for a channel
+     */
+    suspend fun setServoMax(channelIndex: Int, maxPwm: Int): Result<Unit> {
+        if (channelIndex !in 1..MAX_CHANNELS) {
+            return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
+        }
+        if (maxPwm !in 800..2200) {
+            return Result.failure(IllegalArgumentException("Invalid PWM: $maxPwm"))
+        }
+        return setParameter("SERVO${channelIndex}_MAX", maxPwm.toFloat())
+    }
 }
