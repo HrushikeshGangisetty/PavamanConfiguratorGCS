@@ -41,6 +41,7 @@ sealed class Screen(val route: String) {
     object CompassCalibration : Screen("compass_calibration")
     object RCCalibration : Screen("rc_calibration")
     object IMUCalibration : Screen("imu_calibration")
+    object BarometerCalibration : Screen("barometer_calibration")
 }
 
 @Composable
@@ -163,6 +164,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToIMUCalibration = {
                     navController.navigate(Screen.IMUCalibration.route)
+                },
+                onNavigateToBarometerCalibration = {
+                    navController.navigate(Screen.BarometerCalibration.route)
                 }
             )
         }
@@ -370,6 +374,25 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.IMUCalibrationScreen(
                 viewModel = imuCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.BarometerCalibration.route) {
+            // Create Barometer Calibration ViewModel with dependencies
+            val barometerCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationViewModel(telemetryRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationScreen(
+                viewModel = barometerCalibrationViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

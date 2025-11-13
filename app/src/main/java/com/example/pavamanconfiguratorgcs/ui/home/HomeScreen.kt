@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,7 @@ fun HomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF535350),
+                    containerColor = Color(0xFF1E3A5F),
                     titleContentColor = Color.White
                 )
             )
@@ -68,14 +69,22 @@ fun HomeScreen(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(Color(0xFF3A3A38))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1E3A5F), // Dark navy blue
+                            Color(0xFF2B4A73), // Medium navy blue
+                            Color(0xFF1E3A5F)  // Dark navy blue
+                        )
+                    )
+                )
                 .padding(padding),
             contentAlignment = Alignment.Center
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(32.dp),
+                    .padding(horizontal = 48.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -83,7 +92,15 @@ fun HomeScreen(
                 MenuCard(
                     title = "Configurations",
                     onClick = onNavigateToConfigurations,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(180.dp),
+                    gradient = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF4A6A8A), // Light blue-gray
+                            Color(0xFF5A7A9A)  // Lighter blue-gray
+                        )
+                    )
                 )
 
                 Spacer(modifier = Modifier.width(32.dp))
@@ -92,7 +109,15 @@ fun HomeScreen(
                 MenuCard(
                     title = "Full Params",
                     onClick = onNavigateToFullParams,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(180.dp),
+                    gradient = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF4A6A8A), // Light blue-gray
+                            Color(0xFF5A7A9A)  // Lighter blue-gray
+                        )
+                    )
                 )
             }
         }
@@ -103,23 +128,28 @@ fun HomeScreen(
 fun MenuCard(
     title: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    gradient: Brush = Brush.linearGradient(
+        colors = listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
+    )
 ) {
     Card(
         modifier = modifier
-            .aspectRatio(1f) // Makes it square
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF535350)
+            containerColor = Color.Transparent
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 8.dp,
-            pressedElevation = 12.dp
+            defaultElevation = 16.dp,
+            pressedElevation = 20.dp,
+            hoveredElevation = 18.dp
         )
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(brush = gradient),
             contentAlignment = Alignment.Center
         ) {
             Text(
