@@ -7,6 +7,8 @@ import com.divpundir.mavlink.definitions.common.MavParamType
 import com.example.pavamanconfiguratorgcs.data.ParameterRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -165,60 +167,67 @@ class BatteryMonitorViewModel(
                 _successMessage.value = null
 
                 val state = _configState.value
+                val startTime = System.currentTimeMillis()
+
+                Log.i(TAG, "Starting FAST parallel parameter upload...")
+
+                // Upload all parameters in parallel using async for maximum speed
+                val results = listOf(
+                    async {
+                        Triple(
+                            BATT_MONITOR,
+                            parameterRepository.setParameter(BATT_MONITOR, state.battMonitor.toFloat(), MavParamType.INT32),
+                            state.battMonitor
+                        )
+                    },
+                    async {
+                        Triple(
+                            BATT_CAPACITY,
+                            parameterRepository.setParameter(BATT_CAPACITY, state.battCapacity, MavParamType.REAL32),
+                            state.battCapacity
+                        )
+                    },
+                    async {
+                        Triple(
+                            BATT_VOLT_PIN,
+                            parameterRepository.setParameter(BATT_VOLT_PIN, state.voltPin.toFloat(), MavParamType.INT8),
+                            state.voltPin
+                        )
+                    },
+                    async {
+                        Triple(
+                            BATT_CURR_PIN,
+                            parameterRepository.setParameter(BATT_CURR_PIN, state.currPin.toFloat(), MavParamType.INT8),
+                            state.currPin
+                        )
+                    }
+                ).awaitAll()
+
+                val elapsed = System.currentTimeMillis() - startTime
+                Log.i(TAG, "⚡ All parameters sent in ${elapsed}ms")
+
+                // Process results
                 var allSuccess = true
                 val errors = mutableListOf<String>()
 
-                Log.i(TAG, "Starting parameter upload sequence...")
-
-                when (val result = parameterRepository.setParameter(BATT_MONITOR, state.battMonitor.toFloat(), MavParamType.INT32)) {
-                    is ParameterRepository.ParameterResult.Success -> {
-                        Log.i(TAG, "✅ $BATT_MONITOR = ${state.battMonitor} written successfully")
-                    }
-                    else -> {
-                        allSuccess = false
-                        errors.add("$BATT_MONITOR write failed")
-                        Log.e(TAG, "❌ Failed to write $BATT_MONITOR: $result")
-                    }
-                }
-
-                when (val result = parameterRepository.setParameter(BATT_CAPACITY, state.battCapacity, MavParamType.REAL32)) {
-                    is ParameterRepository.ParameterResult.Success -> {
-                        Log.i(TAG, "✅ $BATT_CAPACITY = ${state.battCapacity} written successfully")
-                    }
-                    else -> {
-                        allSuccess = false
-                        errors.add("$BATT_CAPACITY write failed")
-                        Log.e(TAG, "❌ Failed to write $BATT_CAPACITY: $result")
-                    }
-                }
-
-                when (val result = parameterRepository.setParameter(BATT_VOLT_PIN, state.voltPin.toFloat(), MavParamType.INT8)) {
-                    is ParameterRepository.ParameterResult.Success -> {
-                        Log.i(TAG, "✅ $BATT_VOLT_PIN = ${state.voltPin} written successfully")
-                    }
-                    else -> {
-                        allSuccess = false
-                        errors.add("$BATT_VOLT_PIN write failed")
-                        Log.e(TAG, "❌ Failed to write $BATT_VOLT_PIN: $result")
-                    }
-                }
-
-                when (val result = parameterRepository.setParameter(BATT_CURR_PIN, state.currPin.toFloat(), MavParamType.INT8)) {
-                    is ParameterRepository.ParameterResult.Success -> {
-                        Log.i(TAG, "✅ $BATT_CURR_PIN = ${state.currPin} written successfully")
-                    }
-                    else -> {
-                        allSuccess = false
-                        errors.add("$BATT_CURR_PIN write failed")
-                        Log.e(TAG, "❌ Failed to write $BATT_CURR_PIN: $result")
+                results.forEach { (paramName, result, value) ->
+                    when (result) {
+                        is ParameterRepository.ParameterResult.Success -> {
+                            Log.i(TAG, "✅ $paramName = $value written successfully")
+                        }
+                        else -> {
+                            allSuccess = false
+                            errors.add("$paramName write failed")
+                            Log.e(TAG, "❌ Failed to write $paramName: $result")
+                        }
                     }
                 }
 
                 _configState.value = _configState.value.copy(isLoading = false)
 
                 if (allSuccess) {
-                    _successMessage.value = "All parameters uploaded successfully!"
-                    Log.i(TAG, "✅ Parameter upload completed successfully")
+                    _successMessage.value = "All parameters uploaded in ${elapsed}ms! ⚡"
+                    Log.i(TAG, "✅ Parameter upload completed successfully in ${elapsed}ms")
                 } else {
                     _errorMessage.value = "Some parameters failed: ${errors.joinToString(", ")}"
                     Log.e(TAG, "❌ Parameter upload completed with errors: ${errors.joinToString(", ")}")
