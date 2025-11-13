@@ -315,7 +315,24 @@ fun AppNavigation(modifier: Modifier = Modifier) {
         }
 
         composable(Screen.BatteryMonitor.route) {
-            BatteryMonitorScreen(onNavigateBack = { navController.popBackStack() })
+            // Create BatteryMonitorViewModel with dependencies
+            val batteryMonitorViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorViewModel(
+                            telemetryRepository,
+                            parameterRepository
+                        ) as T
+                    }
+                }
+            )
+
+            BatteryMonitorScreen(
+                viewModel = batteryMonitorViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         composable(Screen.CompassCalibration.route) {
