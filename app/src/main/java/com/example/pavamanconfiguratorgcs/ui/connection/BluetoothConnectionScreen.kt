@@ -2,6 +2,7 @@ package com.example.pavamanconfiguratorgcs.ui.connection
 
 import android.Manifest
 import android.os.Build
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -43,14 +44,39 @@ fun BluetoothConnectionScreen(
     var showPopup by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var connectionJob by remember { mutableStateOf<Job?>(null) }
+    var hasRequestedPermissions by remember { mutableStateOf(false) }
 
     // Request Bluetooth permissions
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        Log.d("BluetoothScreen", "Permission results: $permissions")
         val allGranted = permissions.values.all { it }
+        Log.d("BluetoothScreen", "All permissions granted: $allGranted")
         if (allGranted) {
             viewModel.loadPairedDevices()
+        } else {
+            // Permissions denied, trigger UI state update
+            viewModel.retry()
+        }
+    }
+
+    // Auto-request permissions immediately when screen loads
+    LaunchedEffect(Unit) {
+        Log.d("BluetoothScreen", "Screen loaded, checking permission request")
+        if (!hasRequestedPermissions) {
+            hasRequestedPermissions = true
+            delay(100) // Small delay to ensure UI is ready
+            val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                arrayOf(
+                    Manifest.permission.BLUETOOTH_CONNECT,
+                    Manifest.permission.BLUETOOTH_SCAN
+                )
+            } else {
+                arrayOf(Manifest.permission.BLUETOOTH)
+            }
+            Log.d("BluetoothScreen", "Requesting permissions: ${permissions.joinToString()}")
+            permissionLauncher.launch(permissions)
         }
     }
 

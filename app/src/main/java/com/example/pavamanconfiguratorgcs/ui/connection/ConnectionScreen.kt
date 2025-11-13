@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -121,12 +123,11 @@ fun ConnectionScreen(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF535350))
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
+            .padding(20.dp)
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 "Connect to Drone",
@@ -152,14 +153,24 @@ fun ConnectionScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            when (connectionType) {
-                ConnectionType.TCP -> TcpConnectionContent(viewModel)
-                ConnectionType.BLUETOOTH -> BluetoothConnectionContent(viewModel)
-                ConnectionType.USB -> UsbConnectionContent(viewModel, isConnecting) { startConnection() }
+            // Scrollable content area that takes remaining space
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                when (connectionType) {
+                    ConnectionType.TCP -> TcpConnectionContent(viewModel)
+                    ConnectionType.BLUETOOTH -> BluetoothConnectionContent(viewModel)
+                    ConnectionType.USB -> UsbConnectionContent(viewModel, isConnecting) { startConnection() }
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Connect and Cancel buttons - always visible at bottom
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -241,28 +252,51 @@ fun BluetoothConnectionContent(viewModel: ConnectionViewModel) {
     val pairedDevices by viewModel.pairedDevices.collectAsStateWithLifecycle()
     val selectedDevice by viewModel.selectedDevice.collectAsStateWithLifecycle()
 
-    if (pairedDevices.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("No paired Bluetooth devices found.", color = Color.White)
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-        ) {
-            items(pairedDevices) { device ->
-                DeviceRow(
-                    device = device,
-                    isSelected = device.address == selectedDevice?.address,
-                    onClick = { viewModel.onDeviceSelected(device) }
+    // Load paired devices when this composable is displayed
+    LaunchedEffect(Unit) {
+        viewModel.loadPairedDevices()
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        if (pairedDevices.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "No paired Bluetooth devices found.\nPlease pair a device in system settings.",
+                    color = Color.White,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+            ) {
+                items(pairedDevices) { device ->
+                    DeviceRow(
+                        device = device,
+                        isSelected = device.address == selectedDevice?.address,
+                        onClick = { viewModel.onDeviceSelected(device) }
+                    )
+                }
+            }
+        }
+
+        // Refresh devices button
+        OutlinedButton(
+            onClick = { viewModel.loadPairedDevices() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Refresh Devices", color = Color.White)
         }
     }
 }

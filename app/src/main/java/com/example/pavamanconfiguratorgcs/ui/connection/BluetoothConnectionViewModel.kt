@@ -141,21 +141,30 @@ class BluetoothConnectionViewModel(
     }
 
     private fun hasBluetoothPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(
+        val hasPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val hasConnect = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasScan = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH_SCAN
             ) == PackageManager.PERMISSION_GRANTED
+
+            Log.d(TAG, "Android 12+ permissions - BLUETOOTH_CONNECT: $hasConnect, BLUETOOTH_SCAN: $hasScan")
+            hasConnect && hasScan
         } else {
-            ContextCompat.checkSelfPermission(
+            val hasBluetooth = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.BLUETOOTH
             ) == PackageManager.PERMISSION_GRANTED
+
+            Log.d(TAG, "Legacy permissions - BLUETOOTH: $hasBluetooth")
+            hasBluetooth
         }
+
+        Log.d(TAG, "Overall permission status: $hasPermissions")
+        return hasPermissions
     }
 
     override fun onCleared() {
@@ -163,4 +172,3 @@ class BluetoothConnectionViewModel(
         telemetryRepository.disconnect()
     }
 }
-
