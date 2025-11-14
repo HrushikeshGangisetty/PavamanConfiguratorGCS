@@ -42,6 +42,9 @@ class TelemetryRepository {
     // Parameter repository instance (lazy initialized)
     private var parameterRepository: ParameterRepository? = null
 
+    // Frame type repository instance (lazy initialized)
+    private var frameTypeRepository: com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository? = null
+
     // Track last heartbeat time from FCU (thread-safe using AtomicLong)
     private val lastFcuHeartbeatTime = AtomicLong(0L)
 
@@ -440,5 +443,16 @@ class TelemetryRepository {
             parameterRepository = ParameterRepository(conn, scope)
         }
         return parameterRepository!!
+    }
+
+    /**
+     * Get or create the FrameTypeRepository instance
+     */
+    fun getFrameTypeRepository(): com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository {
+        if (frameTypeRepository == null) {
+            val paramRepo = getParameterRepository()
+            frameTypeRepository = com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository(paramRepo)
+        }
+        return frameTypeRepository!!
     }
 }

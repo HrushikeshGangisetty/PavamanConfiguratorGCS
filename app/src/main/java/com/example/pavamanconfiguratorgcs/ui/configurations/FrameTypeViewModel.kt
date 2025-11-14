@@ -67,6 +67,10 @@ class FrameTypeViewModel(
         initialValue = null
     )
 
+    // Selected frame type (pending confirmation)
+    private val _selectedFrameType = MutableStateFlow<FrameType?>(null)
+    val selectedFrameType: StateFlow<FrameType?> = _selectedFrameType.asStateFlow()
+
     /**
      * Detect frame parameters from the vehicle
      * Call this after parameters are loaded
@@ -145,6 +149,35 @@ class FrameTypeViewModel(
      */
     fun clearMessage() {
         _uiMessage.value = null
+    }
+
+    /**
+     * Select a frame type (doesn't write parameters yet)
+     */
+    fun selectFrameType(frameType: FrameType) {
+        _selectedFrameType.value = frameType
+        Log.d(TAG, "Selected frame type: ${frameType.displayName}")
+    }
+
+    /**
+     * Write the selected frame type parameters to the vehicle
+     */
+    fun writeSelectedFrameType() {
+        val selected = _selectedFrameType.value
+        if (selected == null) {
+            _uiMessage.value = "No frame type selected"
+            return
+        }
+
+        // Write the parameters
+        changeFrameType(selected)
+    }
+
+    /**
+     * Clear the selected frame type
+     */
+    fun clearSelectedFrameType() {
+        _selectedFrameType.value = null
     }
 
     /**

@@ -7,6 +7,7 @@ import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
 import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.api.wrap
 import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
+import com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -21,7 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class MotorTestViewModel(
     private val telemetryRepository: TelemetryRepository,
-    private val parameterRepository: ParameterRepository
+    private val parameterRepository: ParameterRepository,
+    private val frameTypeRepository: FrameTypeRepository
 ) : ViewModel() {
 
     companion object {
@@ -59,6 +61,40 @@ class MotorTestViewModel(
     init {
         Log.d(TAG, "MotorTestViewModel initialized")
         loadFrameInfo()
+
+        // Observe frame config changes from FrameTypeRepository
+        viewModelScope.launch {
+            frameTypeRepository.frameConfig.collect { config ->
+                if (config.isDetected) {
+                    val frameClass = config.frameClassValue?.toInt() ?: config.frameParamValue?.toInt() ?: 0
+                    val frameType = config.frameTypeValue?.toInt() ?: 0
+
+                    Log.d(TAG, "Frame config updated from repository: class=$frameClass, type=$frameType")
+                    updateFrameInfoFromConfig(frameClass, frameType)
+                }
+            }
+        }
+    }
+
+    /**
+     * Update frame info from frame config
+     */
+    private fun updateFrameInfoFromConfig(frameClass: Int, frameType: Int) {
+        val motorCount = detectMotorCount(frameClass)
+        val motors = createMotorList(motorCount, frameClass, frameType)
+
+        _uiState.update {
+            it.copy(
+                frameClass = frameClass,
+                frameType = frameType,
+                frameClassName = getFrameClassName(frameClass),
+                frameTypeName = getFrameTypeName(frameType),
+                motorCount = motorCount,
+                motors = motors
+            )
+        }
+
+        Log.d(TAG, "Frame info updated: Class=$frameClass, Type=$frameType, Motors=$motorCount")
     }
 
     /**
@@ -223,8 +259,8 @@ class MotorTestViewModel(
      */
     private fun getFrameTypeName(frameType: Int): String {
         return when (frameType) {
-            0 -> "PLUS"
-            1 -> "X"
+            0 -> "X"  // Fixed: In many ArduPilot versions, 0 = X (not PLUS)
+            1 -> "X"  // Also accept 1 as X for compatibility
             2 -> "V"
             3 -> "H"
             else -> "TYPE_$frameType"

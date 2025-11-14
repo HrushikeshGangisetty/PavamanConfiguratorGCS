@@ -298,7 +298,8 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
                         val parameterRepository = telemetryRepository.getParameterRepository()
-                        return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository) as T
+                        val frameTypeRepository = telemetryRepository.getFrameTypeRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository, frameTypeRepository) as T
                     }
                 }
             )

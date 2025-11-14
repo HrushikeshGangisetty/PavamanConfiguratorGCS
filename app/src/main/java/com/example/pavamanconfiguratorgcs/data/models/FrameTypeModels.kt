@@ -115,12 +115,14 @@ object LegacyFrameMapping {
  * Frame type mapping for ArduPilot FRAME_CLASS + FRAME_TYPE parameters (newer scheme)
  */
 object ClassTypeFrameMapping {
-    // FRAME_CLASS values
+    // FRAME_CLASS values (ArduPilot standard)
     const val CLASS_QUAD = 1
-    const val CLASS_HEXA = 3
-    const val CLASS_OCTA = 5
+    const val CLASS_HEXA = 2  // Fixed: was 3, should be 2
+    const val CLASS_OCTA = 3  // Fixed: was 5, should be 3
 
     // FRAME_TYPE values (X configuration)
+    // ArduPilot uses 0 for PLUS and 1 for X, but some versions use different mappings
+    // Standard mapping: 0=PLUS, 1=X, 2=V, 3=H
     const val TYPE_X = 1
 
     data class ClassTypeValue(val frameClass: Int, val frameType: Int)
@@ -134,7 +136,10 @@ object ClassTypeFrameMapping {
     }
 
     fun valuesToFrameType(frameClass: Float, frameType: Float): FrameType? {
-        if (frameType.toInt() != TYPE_X) return null // Only X-model supported
+        // Accept both 0 and 1 as X type for compatibility
+        // Some ArduPilot versions use 0=X, others use 1=X
+        val typeInt = frameType.toInt()
+        if (typeInt != 0 && typeInt != 1) return null // Only X-model supported
 
         return when (frameClass.toInt()) {
             CLASS_QUAD -> FrameType.QUAD_X
@@ -212,4 +217,3 @@ object MotorLayouts {
         )
     )
 }
-

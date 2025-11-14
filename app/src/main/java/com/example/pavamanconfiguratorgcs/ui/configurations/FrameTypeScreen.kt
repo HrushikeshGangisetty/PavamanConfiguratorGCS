@@ -3,6 +3,8 @@ package com.example.pavamanconfiguratorgcs.ui.configurations
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,6 +33,7 @@ fun FrameTypeScreen(
     val error by viewModel.error.collectAsState()
     val uiMessage by viewModel.uiMessage.collectAsState()
     val motorLayout by viewModel.motorLayout.collectAsState()
+    val selectedFrameType by viewModel.selectedFrameType.collectAsState()
 
     // Detect frame parameters when screen opens or when FCU is detected
     LaunchedEffect(fcuDetected) {
@@ -81,6 +84,7 @@ fun FrameTypeScreen(
                 .background(Color(0xFF3A3A38))
                 .padding(padding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState()) // Enable vertical scrolling
         ) {
             // Current Frame Status
             Text("Select Frame", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -102,31 +106,77 @@ fun FrameTypeScreen(
             ) {
                 FrameTypeCard(
                     title = "Quad-X",
-                    isSelected = frameConfig.currentFrameType == FrameType.QUAD_X,
+                    isSelected = selectedFrameType == FrameType.QUAD_X,
                     modifier = Modifier.weight(1f),
                     enabled = !isLoading && frameConfig.isDetected
                 ) {
-                    viewModel.changeFrameType(FrameType.QUAD_X)
+                    viewModel.selectFrameType(FrameType.QUAD_X)
                 }
                 FrameTypeCard(
                     title = "Hexa-X",
-                    isSelected = frameConfig.currentFrameType == FrameType.HEXA_X,
+                    isSelected = selectedFrameType == FrameType.HEXA_X,
                     modifier = Modifier.weight(1f),
                     enabled = !isLoading && frameConfig.isDetected
                 ) {
-                    viewModel.changeFrameType(FrameType.HEXA_X)
+                    viewModel.selectFrameType(FrameType.HEXA_X)
                 }
                 FrameTypeCard(
                     title = "Octa-X",
-                    isSelected = frameConfig.currentFrameType == FrameType.OCTA_X,
+                    isSelected = selectedFrameType == FrameType.OCTA_X,
                     modifier = Modifier.weight(1f),
                     enabled = !isLoading && frameConfig.isDetected
                 ) {
-                    viewModel.changeFrameType(FrameType.OCTA_X)
+                    viewModel.selectFrameType(FrameType.OCTA_X)
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Write Parameters Button (shown when a frame type is selected)
+            if (selectedFrameType != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2196F3)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Selected: ${selectedFrameType?.displayName}",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Click 'Write Parameters' to apply this frame type to your vehicle.",
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.writeSelectedFrameType() },
+                                enabled = !isLoading,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                            ) {
+                                Text("Write Parameters", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = { viewModel.clearSelectedFrameType() },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                            ) {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // Reboot Warning
             if (frameConfig.rebootRequired) {
