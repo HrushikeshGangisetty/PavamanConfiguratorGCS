@@ -54,16 +54,17 @@ fun ParametersScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Full Parameter List", fontSize = 18.sp) },
+                title = { Text("Full Parameter List", fontSize = 16.sp) }, // Reduced from 18.sp to 16.sp
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, null)
+                        Icon(Icons.Default.ArrowBack, null, tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF2C2C2C),
                     titleContentColor = Color.White
-                )
+                ),
+                modifier = Modifier.height(48.dp) // Added explicit height to make it more compact
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },

@@ -39,7 +39,7 @@ fun CompactToolbar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp), // Reduced from 6.dp to 4.dp
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -47,7 +47,7 @@ fun CompactToolbar(
             Row(
                 modifier = Modifier
                     .width(200.dp)
-                    .height(36.dp)
+                    .height(32.dp) // Reduced from 36.dp to 32.dp
                     .background(Color(0xFF000000))
                     .border(2.dp, Color(0xFF00FF00))
                     .padding(horizontal = 8.dp),
