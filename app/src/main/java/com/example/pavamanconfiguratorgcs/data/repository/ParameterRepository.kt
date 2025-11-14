@@ -2,27 +2,34 @@ package com.example.pavamanconfiguratorgcs.data.repository
 
 import android.util.Log
 import com.divpundir.mavlink.adapters.coroutines.CoroutinesMavConnection
+import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
 import com.divpundir.mavlink.definitions.common.*
 import com.divpundir.mavlink.api.MavEnumValue
+import com.divpundir.mavlink.api.wrap
 import com.example.pavamanconfiguratorgcs.data.models.Parameter
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.time.Duration.Companion.seconds
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Repository for managing MAVLink parameters
+ * Unified repository for managing MAVLink parameters
  * Handles fetching, updating, and caching of flight controller parameters
+ * with robust retry logic and metadata support
  */
 class ParameterRepository(
     private val connection: CoroutinesMavConnection,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val gcsSystemId: UByte = 255u,
+    private val gcsComponentId: UByte = 190u,
+    private val fcuSystemId: UByte = 1u,
+    private val fcuComponentId: UByte = 1u
 ) {
     companion object {
         private const val TAG = "ParameterRepository"
-        private const val TARGET_SYSTEM: UByte = 1u
-        private const val TARGET_COMPONENT: UByte = 1u
-        private const val GCS_SYSTEM: UByte = 255u
-        private const val GCS_COMPONENT: UByte = 0u
+        private const val PARAM_TIMEOUT_MS = 6000L
+        private const val MAX_RETRIES = 5
+        private const val BETWEEN_PARAM_DELAY_MS = 200L
     }
 
     // Parameters storage
@@ -53,12 +60,24 @@ class ParameterRepository(
         val errorMessage: String? = null
     )
 
+    // Result types for compatibility with existing code
+    sealed class ParameterResult {
+        data class Success(val parameter: ParameterValue) : ParameterResult()
+        data class Error(val message: String) : ParameterResult()
+        object Timeout : ParameterResult()
+    }
+
+    data class ParameterValue(
+        val name: String,
+        val value: Float,
+        val type: MavParamType,
+        val index: Int = -1,
+        val component: Int = -1
+    )
+
     init {
         // Start listening for PARAM_VALUE messages
         startListening()
-
-        // Load parameter metadata in background
-        // DON'T start here - wait until parameters are actually requested
     }
 
     /**
@@ -89,18 +108,39 @@ class ParameterRepository(
      * MAIN COMMAND: Request all parameters from flight controller
      * This sends PARAM_REQUEST_LIST MAVLink message
      */
-    suspend fun requestAllParameters(): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun requestAllParameters(timeoutMs: Long = 120000L, forceRefresh: Boolean = false): Map<String, ParameterValue> = withContext(Dispatchers.IO) {
         try {
             // Check if already fetching
             if (isFetching) {
                 Log.d(TAG, "⏳ Parameter fetch already in progress, skipping duplicate request")
-                return@withContext Result.success(Unit)
+                // Return current cached parameters as ParameterValue map
+                return@withContext _parameters.value.mapValues { (_, param) ->
+                    ParameterValue(
+                        name = param.name,
+                        value = param.value,
+                        type = mavParamTypeFromEnumValue(param.type),
+                        index = param.index.toInt(),
+                        component = -1
+                    )
+                }
             }
 
-            // Check if parameters already loaded
-            if (_parameters.value.isNotEmpty() && expectedParamCount > 0u && receivedIndices.size >= expectedParamCount.toInt()) {
+            // Check if parameters already loaded (skip if forceRefresh is true)
+            if (!forceRefresh && _parameters.value.isNotEmpty() && expectedParamCount > 0u && receivedIndices.size >= expectedParamCount.toInt()) {
                 Log.d(TAG, "✅ Parameters already loaded (${_parameters.value.size} params), skipping fetch")
-                return@withContext Result.success(Unit)
+                return@withContext _parameters.value.mapValues { (_, param) ->
+                    ParameterValue(
+                        name = param.name,
+                        value = param.value,
+                        type = mavParamTypeFromEnumValue(param.type),
+                        index = param.index.toInt(),
+                        component = -1
+                    )
+                }
+            }
+
+            if (forceRefresh) {
+                Log.d(TAG, "🔄 Force refresh requested - clearing cache and fetching fresh parameters")
             }
 
             isFetching = true
@@ -116,23 +156,33 @@ class ParameterRepository(
 
             // COMMAND: Send PARAM_REQUEST_LIST
             val request = ParamRequestList(
-                targetSystem = TARGET_SYSTEM,
-                targetComponent = TARGET_COMPONENT
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId
             )
 
-            connection.sendUnsignedV2(
-                systemId = GCS_SYSTEM,
-                componentId = GCS_COMPONENT,
+            connection.trySendUnsignedV2(
+                systemId = gcsSystemId,
+                componentId = gcsComponentId,
                 payload = request
             )
 
             Log.i(TAG, "✅ PARAM_REQUEST_LIST sent to FC")
 
             // Wait for completion
-            waitForParameterCompletion()
+            waitForParameterCompletion(timeoutMs)
 
             isFetching = false
-            Result.success(Unit)
+
+            // Return as ParameterValue map
+            _parameters.value.mapValues { (_, param) ->
+                ParameterValue(
+                    name = param.name,
+                    value = param.value,
+                    type = mavParamTypeFromEnumValue(param.type),
+                    index = param.index.toInt(),
+                    component = -1
+                )
+            }
 
         } catch (e: Exception) {
             isFetching = false
@@ -142,7 +192,7 @@ class ParameterRepository(
                 total = expectedParamCount.toInt(),
                 errorMessage = e.message
             )
-            Result.failure(e)
+            emptyMap()
         }
     }
 
@@ -167,34 +217,14 @@ class ParameterRepository(
             result.fold(
                 onSuccess = {
                     Log.i(TAG, "✅ Metadata loaded successfully")
-
-                    // Verify metadata is actually there
-                    val testParams = listOf("WPNAV_SPEED", "BATT_CAPACITY", "ANGLE_MAX", "RTL_ALT", "SYSID_THISMAV")
-                    testParams.forEach { paramName ->
-                        val meta = metadataProvider.getMetadata(paramName)
-                        Log.i(TAG, "  Test '$paramName': displayName='${meta.displayName}', units='${meta.units}', default=${meta.defaultValue}")
-                    }
-
-                    Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 },
                 onFailure = { error ->
-                    Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                    Log.e(TAG, "❌❌❌ METADATA LOAD FAILED ❌❌❌")
-                    Log.e(TAG, "Error type: ${error.javaClass.simpleName}")
-                    Log.e(TAG, "Error message: ${error.message}")
-                    Log.e(TAG, "Stack trace:")
-                    error.printStackTrace()
-                    Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                    Log.e(TAG, "❌ METADATA LOAD FAILED: ${error.message}")
                     Log.w(TAG, "⚠️ Continuing without metadata - parameters will have no descriptions")
                 }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.e(TAG, "❌❌❌ EXCEPTION IN ensureMetadataLoaded ❌❌❌")
-            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
-            Log.e(TAG, "Message: ${e.message}")
-            e.printStackTrace()
-            Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.e(TAG, "❌ EXCEPTION IN ensureMetadataLoaded: ${e.message}")
         }
     }
 
@@ -210,12 +240,7 @@ class ParameterRepository(
             }
 
             // Extract parameter name (remove null terminators)
-            val paramName = paramValue.paramId.trimEnd('\u0000')
-
-            // DEBUG: Log every parameter received for first 10
-            if (receivedIndices.size < 10) {
-                Log.d(TAG, "📨 RAW ParamValue received: name=$paramName, index=${paramValue.paramIndex}, value=${paramValue.paramValue}, count=${paramValue.paramCount}")
-            }
+            val paramName = paramValue.paramId.replace("\u0000", "").trim().uppercase().take(16)
 
             // Check if this is a write confirmation
             if (inFlightWrites.contains(paramName)) {
@@ -225,22 +250,6 @@ class ParameterRepository(
 
             // Get metadata for this parameter
             val metadata = metadataProvider.getMetadata(paramName)
-
-            // Log metadata enrichment for first few parameters to verify data is coming through
-            if (receivedIndices.size < 5) {
-                val descPreview = if (metadata.description.length > 50) {
-                    metadata.description.take(50) + "..."
-                } else {
-                    metadata.description
-                }
-                Log.i(TAG, "📝 Parameter #${receivedIndices.size + 1}: $paramName")
-                Log.i(TAG, "   Display Name: '${metadata.displayName}'")
-                Log.i(TAG, "   Units: '${metadata.units}'")
-                Log.i(TAG, "   Description: '$descPreview'")
-                Log.i(TAG, "   Default: ${metadata.defaultValue}")
-                Log.i(TAG, "   Range: ${metadata.minValue} - ${metadata.maxValue}")
-                Log.i(TAG, "   Reboot Required: ${metadata.rebootRequired}")
-            }
 
             // Create parameter object with metadata
             val parameter = Parameter(
@@ -267,13 +276,9 @@ class ParameterRepository(
             val actualIndex = paramValue.paramIndex
             if (actualIndex != 65535u.toUShort()) {
                 receivedIndices.add(actualIndex)
-                // Log every 10th parameter or first 10
-                if (receivedIndices.size <= 10 || receivedIndices.size % 10 == 0) {
+                if (receivedIndices.size <= 10 || receivedIndices.size % 50 == 0) {
                     Log.d(TAG, "📥 Progress: ${receivedIndices.size}/${expectedParamCount}")
                 }
-            } else {
-                // Parameter with invalid index - still count it but log warning
-                Log.w(TAG, "⚠️ Parameter $paramName has invalid index 65535")
             }
 
             // Update progress
@@ -284,17 +289,15 @@ class ParameterRepository(
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling PARAM_VALUE", e)
-            e.printStackTrace()
         }
     }
 
     /**
      * Wait for all parameters to be received with timeout
      */
-    private suspend fun waitForParameterCompletion() {
+    private suspend fun waitForParameterCompletion(overallTimeout: Long) {
         val startTime = System.currentTimeMillis()
-        val overallTimeout = 120_000L // 2 minutes overall timeout
-        val noProgressTimeout = 5_000L // 5 seconds without new parameters (reduced for faster detection)
+        val noProgressTimeout = 5_000L
         var lastProgressTime = System.currentTimeMillis()
         var lastReceivedCount = 0
         var recoveryAttempts = 0
@@ -309,12 +312,7 @@ class ParameterRepository(
             if (currentReceivedCount > lastReceivedCount) {
                 lastProgressTime = System.currentTimeMillis()
                 lastReceivedCount = currentReceivedCount
-                recoveryAttempts = 0 // Reset recovery attempts when we make progress
-
-                // Log progress every 50 parameters
-                if (currentReceivedCount % 50 == 0 && expectedParamCount > 0u) {
-                    Log.i(TAG, "📥 Progress: $currentReceivedCount/${expectedParamCount}")
-                }
+                recoveryAttempts = 0
             }
 
             // Check if all parameters received
@@ -328,85 +326,43 @@ class ParameterRepository(
                 break
             }
 
-            // Check no-progress timeout (no new parameters for 5 seconds)
+            // Check no-progress timeout
             val timeSinceProgress = System.currentTimeMillis() - lastProgressTime
             if (expectedParamCount > 0u && timeSinceProgress > noProgressTimeout && recoveryAttempts < maxRecoveryAttempts) {
                 val missing = expectedParamCount.toInt() - receivedIndices.size
-                Log.w(TAG, "⏱️ No progress timeout (attempt ${recoveryAttempts + 1}/$maxRecoveryAttempts): Received ${receivedIndices.size}/${expectedParamCount}, Missing: $missing")
+                Log.w(TAG, "⏱️ No progress timeout (attempt ${recoveryAttempts + 1}/$maxRecoveryAttempts): Missing $missing")
 
-                // If we got very few parameters, the FC might not be responding to PARAM_REQUEST_LIST properly
-                if (receivedIndices.size < 10 && recoveryAttempts == 0) {
-                    Log.w(TAG, "⚠️ Very few parameters received. FC may not support PARAM_REQUEST_LIST properly.")
-                    Log.i(TAG, "🔄 Requesting parameters individually by index...")
-                    requestParametersByIndex(0, minOf(100, expectedParamCount.toInt()))
-                } else {
-                    // Request missing parameters
-                    Log.i(TAG, "🔄 Attempting to recover $missing missing parameters...")
-                    requestMissingParameters()
-                }
-
+                requestMissingParameters()
                 recoveryAttempts++
                 lastProgressTime = System.currentTimeMillis()
-                delay(5000) // Wait 5 seconds for missing params to arrive
+                delay(5000)
             }
 
             // After max recovery attempts, give up
             if (recoveryAttempts >= maxRecoveryAttempts) {
                 val finalMissing = expectedParamCount.toInt() - receivedIndices.size
-                if (finalMissing > 0) {
-                    Log.w(TAG, "⚠️ Incomplete after $maxRecoveryAttempts attempts: Received ${receivedIndices.size}/${expectedParamCount}, Still missing: $finalMissing")
-                    _loadingProgress.value = LoadingProgress(
-                        current = receivedIndices.size,
-                        total = expectedParamCount.toInt(),
-                        isComplete = false,
-                        errorMessage = "Incomplete: $finalMissing parameters missing after $maxRecoveryAttempts attempts"
-                    )
-                } else {
-                    _loadingProgress.value = LoadingProgress(
-                        current = receivedIndices.size,
-                        total = expectedParamCount.toInt(),
-                        isComplete = true
-                    )
-                }
-                break
-            }
-
-            // Check overall timeout (2 minutes total)
-            if (System.currentTimeMillis() - startTime > overallTimeout) {
-                val missing = if (expectedParamCount > 0u) expectedParamCount.toInt() - receivedIndices.size else 0
-                Log.e(TAG, "❌ Overall timeout: Received ${receivedIndices.size}/${expectedParamCount}, Missing: $missing")
-
+                Log.w(TAG, "⚠️ Incomplete: Still missing $finalMissing parameters")
                 _loadingProgress.value = LoadingProgress(
                     current = receivedIndices.size,
                     total = expectedParamCount.toInt(),
                     isComplete = false,
-                    errorMessage = "Overall timeout: $missing parameters missing"
+                    errorMessage = "Incomplete: $finalMissing parameters missing"
                 )
                 break
             }
-        }
-    }
 
-    /**
-     * Request parameters by index range (useful when PARAM_REQUEST_LIST doesn't work)
-     */
-    private suspend fun requestParametersByIndex(startIndex: Int, endIndex: Int) {
-        Log.d(TAG, "🔄 Requesting parameters by index: $startIndex to $endIndex")
-        for (index in startIndex until endIndex) {
-            val request = ParamRequestRead(
-                targetSystem = TARGET_SYSTEM,
-                targetComponent = TARGET_COMPONENT,
-                paramId = "",
-                paramIndex = index.toShort()
-            )
-
-            connection.sendUnsignedV2(
-                systemId = GCS_SYSTEM,
-                componentId = GCS_COMPONENT,
-                payload = request
-            )
-
-            delay(20) // Small delay between requests to avoid overwhelming the FC
+            // Check overall timeout
+            if (System.currentTimeMillis() - startTime > overallTimeout) {
+                val missing = if (expectedParamCount > 0u) expectedParamCount.toInt() - receivedIndices.size else 0
+                Log.e(TAG, "❌ Overall timeout: Missing $missing")
+                _loadingProgress.value = LoadingProgress(
+                    current = receivedIndices.size,
+                    total = expectedParamCount.toInt(),
+                    isComplete = false,
+                    errorMessage = "Timeout: $missing parameters missing"
+                )
+                break
+            }
         }
     }
 
@@ -419,26 +375,109 @@ class ParameterRepository(
         for (index in 0 until expectedParamCount.toInt()) {
             if (!receivedIndices.contains(index.toUShort())) {
                 val request = ParamRequestRead(
-                    targetSystem = TARGET_SYSTEM,
-                    targetComponent = TARGET_COMPONENT,
+                    targetSystem = fcuSystemId,
+                    targetComponent = fcuComponentId,
                     paramId = "",
                     paramIndex = index.toShort()
                 )
 
-                connection.sendUnsignedV2(
-                    systemId = GCS_SYSTEM,
-                    componentId = GCS_COMPONENT,
+                connection.trySendUnsignedV2(
+                    systemId = gcsSystemId,
+                    componentId = gcsComponentId,
                     payload = request
                 )
 
-                delay(50) // Small delay between requests
+                delay(50)
             }
         }
     }
 
     /**
-     * SAVE COMMAND: Set parameter value to flight controller
-     * This sends PARAM_SET MAVLink message
+     * Set a parameter on the autopilot with retry logic - returns ParameterResult
+     */
+    suspend fun setParameter(
+        paramName: String,
+        value: Float,
+        paramType: MavParamType = MavParamType.REAL32,
+        force: Boolean = false
+    ): ParameterResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "setParameter: $paramName = $value (type: $paramType)")
+
+        val normalizedRaw = paramName.trim().uppercase()
+        val paramId16 = normalizedRaw.take(16)
+
+        var currentParam = _parameters.value[paramId16]
+        var effectiveParamType = paramType
+
+        if (currentParam != null) {
+            effectiveParamType = mavParamTypeFromEnumValue(currentParam.type)
+        }
+
+        // Check if already set
+        if (!force && currentParam != null && floatEquals(currentParam.value, value)) {
+            Log.d(TAG, "Parameter $paramName already set to $value, skipping")
+            return@withContext ParameterResult.Success(
+                ParameterValue(paramId16, value, effectiveParamType, currentParam.index.toInt(), -1)
+            )
+        }
+
+        val paramIdForMessage = paramId16.padEnd(16, '\u0000')
+        val paramSet = ParamSet(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId,
+            paramId = paramIdForMessage,
+            paramValue = value,
+            paramType = effectiveParamType.wrap()
+        )
+
+        var retries = MAX_RETRIES
+        var result: ParameterResult = ParameterResult.Timeout
+
+        while (retries > 0) {
+            try {
+                Log.d(TAG, "Sending PARAM_SET for $paramName (attempt ${MAX_RETRIES - retries + 1}/$MAX_RETRIES)")
+
+                connection.trySendUnsignedV2(
+                    systemId = gcsSystemId,
+                    componentId = gcsComponentId,
+                    payload = paramSet
+                )
+
+                result = waitForParameterEcho(paramId16, PARAM_TIMEOUT_MS)
+
+                if (result is ParameterResult.Success) {
+                    Log.d(TAG, "Parameter $paramName set successfully to $value")
+                    return@withContext result
+                }
+
+                // Fallback: request parameter directly
+                if (result is ParameterResult.Timeout) {
+                    Log.w(TAG, "No PARAM_VALUE echo for $paramName, requesting parameter as fallback")
+                    val req = requestParameter(paramId16)
+                    if (req is ParameterResult.Success && floatEquals(req.parameter.value, value)) {
+                        Log.d(TAG, "Parameter $paramName appears applied after request fallback")
+                        return@withContext req
+                    }
+                }
+
+                Log.w(TAG, "Retry $paramName (${MAX_RETRIES - retries + 1}/$MAX_RETRIES): $result")
+                retries--
+                if (retries > 0) delay(150)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting parameter $paramName", e)
+                result = ParameterResult.Error(e.message ?: "Unknown error")
+                retries--
+            }
+        }
+
+        Log.e(TAG, "Failed to set parameter $paramName after $MAX_RETRIES attempts")
+        result
+    }
+
+    /**
+     * SAVE COMMAND: Set parameter value (original signature for compatibility)
      */
     suspend fun setParameter(
         paramName: String,
@@ -450,22 +489,21 @@ class ParameterRepository(
 
             inFlightWrites.add(paramName)
 
-            // COMMAND: Send PARAM_SET
             val paramSet = ParamSet(
-                targetSystem = TARGET_SYSTEM,
-                targetComponent = TARGET_COMPONENT,
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
                 paramId = paramName,
                 paramValue = paramValue,
                 paramType = paramType
             )
 
-            connection.sendUnsignedV2(
-                systemId = GCS_SYSTEM,
-                componentId = GCS_COMPONENT,
+            connection.trySendUnsignedV2(
+                systemId = gcsSystemId,
+                componentId = gcsComponentId,
                 payload = paramSet
             )
 
-            // Wait for confirmation (PARAM_VALUE response)
+            // Wait for confirmation
             val confirmed = withTimeoutOrNull(5.seconds) {
                 while (inFlightWrites.contains(paramName)) {
                     delay(100)
@@ -490,20 +528,133 @@ class ParameterRepository(
     }
 
     /**
-     * Request specific parameter by name
+     * Wait for PARAM_VALUE echo
      */
-    suspend fun requestParameter(paramName: String): Result<Parameter> = withContext(Dispatchers.IO) {
+    private suspend fun waitForParameterEcho(
+        paramId: String,
+        timeoutMs: Long
+    ): ParameterResult = withTimeoutOrNull(timeoutMs) {
+        val expected = paramId.replace("\u0000", "").trim().uppercase()
+
+        connection.mavFrame
+            .filter { frame ->
+                frame.message is ParamValue && frame.systemId == fcuSystemId
+            }
+            .map { frame -> frame }
+            .filter { frame ->
+                val paramValue = frame.message as ParamValue
+                val recv = paramValue.paramId.replace("\u0000", "").trim().uppercase()
+                recv == expected || recv.startsWith(expected) || expected.startsWith(recv)
+            }
+            .first()
+            .let { frame ->
+                val paramValue = frame.message as ParamValue
+                val typeValue = paramValue.paramType.value.toInt()
+                val paramTypeEnum = MavParamType.entries.find { it.value.toInt() == typeValue } ?: MavParamType.REAL32
+                val recvName = paramValue.paramId.replace("\u0000", "").trim().uppercase().take(16)
+
+                val parameter = ParameterValue(
+                    name = recvName,
+                    value = paramValue.paramValue,
+                    type = paramTypeEnum,
+                    index = paramValue.paramIndex.toInt(),
+                    component = frame.componentId.toInt()
+                )
+
+                // Update cache
+                val metadata = metadataProvider.getMetadata(recvName)
+                val param = Parameter(
+                    name = recvName,
+                    value = paramValue.paramValue,
+                    type = paramValue.paramType,
+                    index = paramValue.paramIndex,
+                    originalValue = paramValue.paramValue,
+                    displayName = metadata.displayName.ifEmpty { recvName },
+                    description = metadata.description,
+                    units = metadata.units,
+                    minValue = metadata.minValue,
+                    maxValue = metadata.maxValue,
+                    defaultValue = metadata.defaultValue,
+                    rebootRequired = metadata.rebootRequired
+                )
+                _parameters.update { it + (recvName to param) }
+
+                Log.d(TAG, "Received PARAM_VALUE: $recvName = ${paramValue.paramValue}")
+                ParameterResult.Success(parameter)
+            }
+    } ?: ParameterResult.Timeout
+
+    /**
+     * Get a parameter from cache without sending a MAVLink request.
+     * Returns null if not in cache.
+     */
+    fun getCachedParameter(paramName: String): Parameter? {
+        val normalizedName = paramName.trim().uppercase().take(16)
+        return _parameters.value[normalizedName]
+    }
+
+    /**
+     * Request a specific parameter from the autopilot
+     * Checks cache first, then sends MAVLink request if not found
+     */
+    suspend fun requestParameter(paramName: String): ParameterResult = withContext(Dispatchers.IO) {
+        val paramIdRaw = paramName.trim().uppercase()
+
+        // Check cache first
+        val cached = getCachedParameter(paramIdRaw)
+        if (cached != null) {
+            Log.d(TAG, "Parameter $paramIdRaw found in cache: ${cached.value}")
+            return@withContext ParameterResult.Success(
+                ParameterValue(
+                    name = cached.name,
+                    value = cached.value,
+                    type = mavParamTypeFromEnumValue(cached.type),
+                    index = cached.index.toInt(),
+                    component = -1
+                )
+            )
+        }
+
+        Log.d(TAG, "Requesting parameter from FC: $paramName")
+
+        val paramId = paramIdRaw.take(16).padEnd(16, '\u0000')
+
+        val paramRequest = ParamRequestRead(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId,
+            paramId = paramId,
+            paramIndex = -1
+        )
+
+        return@withContext try {
+            connection.trySendUnsignedV2(
+                systemId = gcsSystemId,
+                componentId = gcsComponentId,
+                payload = paramRequest
+            )
+
+            waitForParameterEcho(paramIdRaw.take(16), 1000L)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting parameter $paramName", e)
+            ParameterResult.Error(e.message ?: "Unknown error")
+        }
+    }
+
+    /**
+     * Request specific parameter by name (original signature for compatibility)
+     */
+    suspend fun requestParameter(paramName: String, returnResult: Boolean = false): Result<Parameter> = withContext(Dispatchers.IO) {
         try {
             val request = ParamRequestRead(
-                targetSystem = TARGET_SYSTEM,
-                targetComponent = TARGET_COMPONENT,
+                targetSystem = fcuSystemId,
+                targetComponent = fcuComponentId,
                 paramId = paramName,
                 paramIndex = -1
             )
 
-            connection.sendUnsignedV2(
-                systemId = GCS_SYSTEM,
-                componentId = GCS_COMPONENT,
+            connection.trySendUnsignedV2(
+                systemId = gcsSystemId,
+                componentId = gcsComponentId,
                 payload = request
             )
 
@@ -515,11 +666,20 @@ class ParameterRepository(
                     .first { it.paramId.trimEnd('\u0000') == paramName }
             }
 
+            val metadata = metadataProvider.getMetadata(paramName)
             val parameter = Parameter(
                 name = paramName,
                 value = paramValue.paramValue,
                 type = paramValue.paramType,
-                index = paramValue.paramIndex
+                index = paramValue.paramIndex,
+                originalValue = paramValue.paramValue,
+                displayName = metadata.displayName.ifEmpty { paramName },
+                description = metadata.description,
+                units = metadata.units,
+                minValue = metadata.minValue,
+                maxValue = metadata.maxValue,
+                defaultValue = metadata.defaultValue,
+                rebootRequired = metadata.rebootRequired
             )
 
             Result.success(parameter)
@@ -530,6 +690,145 @@ class ParameterRepository(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to request parameter: $paramName", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Apply frame-related parameters sequentially
+     */
+    suspend fun applyFrameParameters(frameParams: Map<String, Float>): Map<String, ParameterResult> = withContext(Dispatchers.IO) {
+        val allowedParams = setOf("FRAME", "FRAME_CLASS", "FRAME_TYPE")
+        val normalized = frameParams.mapKeys { it.key.trim().uppercase().take(16) }
+            .filter { (k, _) -> allowedParams.contains(k) }
+
+        Log.d(TAG, "Applying frame parameters: ${normalized.keys}")
+
+        val results = mutableMapOf<String, ParameterResult>()
+
+        if (normalized.isEmpty()) {
+            Log.w(TAG, "No supported frame parameters provided")
+            allowedParams.forEach { results[it] = ParameterResult.Error("Not provided") }
+            return@withContext results.toMap()
+        }
+
+        for ((name, value) in normalized) {
+            try {
+                val res = setParameter(name, value)
+                results[name] = res
+
+                if (res is ParameterResult.Success) {
+                    Log.d(TAG, "Applied frame param $name = $value")
+                } else {
+                    Log.w(TAG, "Failed to apply frame param $name: $res")
+                }
+
+                delay(BETWEEN_PARAM_DELAY_MS)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception while applying frame parameter $name", e)
+                results[name] = ParameterResult.Error(e.message ?: "Unknown error")
+            }
+        }
+
+        // Verify parameters
+        for ((name, expected) in normalized) {
+            try {
+                val read = requestParameter(name)
+                when (read) {
+                    is ParameterResult.Success -> {
+                        if (!floatEquals(read.parameter.value, expected)) {
+                            Log.w(TAG, "Verification mismatch for $name: expected=$expected read=${read.parameter.value}")
+                            if (results[name] is ParameterResult.Success) {
+                                results[name] = ParameterResult.Error("Verification mismatch: read=${read.parameter.value}")
+                            }
+                        } else {
+                            Log.d(TAG, "Verification OK for $name: $expected")
+                            results[name] = ParameterResult.Success(read.parameter)
+                        }
+                    }
+                    is ParameterResult.Timeout -> {
+                        Log.w(TAG, "Verification timeout reading $name")
+                        results[name] = ParameterResult.Timeout
+                    }
+                    is ParameterResult.Error -> {
+                        Log.w(TAG, "Verification error reading $name: ${read.message}")
+                        results[name] = ParameterResult.Error(read.message)
+                    }
+                }
+                delay(50)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception while verifying frame parameter $name", e)
+            }
+        }
+
+        results.toMap()
+    }
+
+    /**
+     * Find parameters by prefix
+     */
+    suspend fun findParametersByPrefix(prefix: String, timeoutMs: Long = 2000L): Map<String, ParameterValue> = withContext(Dispatchers.IO) {
+        val normPrefix = prefix.trim().uppercase()
+
+        val request = ParamRequestList(
+            targetSystem = fcuSystemId,
+            targetComponent = fcuComponentId
+        )
+
+        try {
+            connection.trySendUnsignedV2(
+                systemId = gcsSystemId,
+                componentId = gcsComponentId,
+                payload = request
+            )
+
+            val found = mutableMapOf<String, ParameterValue>()
+
+            withTimeoutOrNull(timeoutMs) {
+                connection.mavFrame
+                    .filter { frame -> frame.message is ParamValue && frame.systemId == fcuSystemId }
+                    .map { frame -> frame }
+                    .collect { frame ->
+                        val paramValue = frame.message as ParamValue
+                        val recvName = paramValue.paramId.replace("\u0000", "").trim().uppercase().take(16)
+                        if (recvName.startsWith(normPrefix) || recvName.contains(normPrefix)) {
+                            val typeValue = paramValue.paramType.value.toInt()
+                            val paramTypeEnum = MavParamType.entries.find { it.value.toInt() == typeValue } ?: MavParamType.REAL32
+                            val pv = ParameterValue(
+                                name = recvName,
+                                value = paramValue.paramValue,
+                                type = paramTypeEnum,
+                                index = paramValue.paramIndex.toInt(),
+                                component = frame.componentId.toInt()
+                            )
+                            found[recvName] = pv
+                        }
+                    }
+            }
+
+            Log.d(TAG, "findParametersByPrefix: found ${found.size} params matching prefix '$prefix'")
+            found.toMap()
+        } catch (e: Exception) {
+            Log.w(TAG, "findParametersByPrefix failed: ${e.message}")
+            emptyMap()
+        }
+    }
+
+    /**
+     * Get cached parameters snapshot
+     */
+    fun getCachedParametersSnapshot(): Map<String, ParameterValue> {
+        return _parameters.value.mapValues { (_, param) ->
+            ParameterValue(
+                name = param.name,
+                value = param.value,
+                type = mavParamTypeFromEnumValue(param.type),
+                index = param.index.toInt(),
+                component = -1
+            )
         }
     }
 
@@ -546,11 +845,17 @@ class ParameterRepository(
 
     /**
      * Detect vehicle type from system ID or default to copter
-     * This can be enhanced to detect from MAVLink AUTOPILOT_VERSION message
      */
     private fun detectVehicleType(): String? {
-        // For now, default to copter
-        // TODO: Detect from MAVLink messages in future
         return "copter"
+    }
+
+    // Utility functions
+    private fun floatEquals(a: Float, b: Float, eps: Float = 1e-5f): Boolean =
+        kotlin.math.abs(a - b) <= eps
+
+    private fun mavParamTypeFromEnumValue(enumValue: MavEnumValue<MavParamType>): MavParamType {
+        val typeValue = enumValue.value.toInt()
+        return MavParamType.entries.find { it.value.toInt() == typeValue } ?: MavParamType.REAL32
     }
 }

@@ -4,9 +4,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.adapters.coroutines.trySendUnsignedV2
-import com.divpundir.mavlink.api.wrap
 import com.divpundir.mavlink.definitions.common.*
-import com.example.pavamanconfiguratorgcs.data.ParameterRepository
+import com.divpundir.mavlink.api.wrap
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

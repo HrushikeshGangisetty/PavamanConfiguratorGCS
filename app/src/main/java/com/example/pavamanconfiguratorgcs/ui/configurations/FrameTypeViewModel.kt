@@ -9,6 +9,7 @@ import com.example.pavamanconfiguratorgcs.data.models.MotorLayout
 import com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /**
  * ViewModel for Frame Type selection and configuration
@@ -66,25 +67,6 @@ class FrameTypeViewModel(
         initialValue = null
     )
 
-    init {
-        // Observe repository frameConfig changes so the UI updates even if detection occurred earlier
-        viewModelScope.launch {
-            frameTypeRepository.frameConfig.collect { config ->
-                if (config.isValid) {
-                    val message = "Frame type detected: ${config.currentFrameType?.displayName}"
-                    _uiMessage.value = message
-                    Log.i(TAG, "$message (from collector)")
-                    // Clear repository error if any
-                    frameTypeRepository.clearError()
-                } else {
-                    // If not detected and repository has set an error, reflect nothing here — UI will show repo.error
-                    // Keep _uiMessage null to avoid stale success message
-                    _uiMessage.value = null
-                }
-            }
-        }
-    }
-
     /**
      * Detect frame parameters from the vehicle
      * Call this after parameters are loaded
@@ -92,6 +74,9 @@ class FrameTypeViewModel(
     fun detectFrameParameters() {
         viewModelScope.launch {
             Log.d(TAG, "Detecting frame parameters...")
+            // Clear any stale messages
+            _uiMessage.value = null
+
             val result = frameTypeRepository.detectFrameParameters()
 
             result.fold(
@@ -106,7 +91,7 @@ class FrameTypeViewModel(
                 },
                 onFailure = { error ->
                     val message = "Failed to detect frame: ${error.message}"
-                    _uiMessage.value = message
+                    _uiMessage.value = null // Don't show UI message for errors, use error state
                     Log.e(TAG, message, error)
                 }
             )
@@ -120,6 +105,9 @@ class FrameTypeViewModel(
     fun changeFrameType(frameType: FrameType) {
         viewModelScope.launch {
             Log.d(TAG, "Changing frame type to ${frameType.displayName}...")
+
+            // Clear previous messages
+            _uiMessage.value = null
 
             val result = frameTypeRepository.changeFrameType(frameType)
 
@@ -143,7 +131,13 @@ class FrameTypeViewModel(
      */
     fun acknowledgeReboot() {
         frameTypeRepository.clearRebootRequired()
-        _uiMessage.value = "Reboot acknowledged. Please verify the new frame configuration."
+        _uiMessage.value = "Reboot acknowledged. Re-detecting frame configuration..."
+
+        // Re-detect parameters after reboot acknowledgment
+        viewModelScope.launch {
+            delay(500)
+            detectFrameParameters()
+        }
     }
 
     /**

@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MavParamType
 import com.divpundir.mavlink.definitions.common.RcChannels
-import com.example.pavamanconfiguratorgcs.data.ParameterRepository
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
 import com.example.pavamanconfiguratorgcs.data.models.FirmwareType
 import com.example.pavamanconfiguratorgcs.data.models.FlightMode
 import com.example.pavamanconfiguratorgcs.data.models.FlightModeConfiguration

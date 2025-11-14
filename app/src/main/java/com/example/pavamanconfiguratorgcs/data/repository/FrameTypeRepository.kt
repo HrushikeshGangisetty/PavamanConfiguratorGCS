@@ -2,7 +2,6 @@ package com.example.pavamanconfiguratorgcs.data.repository
 
 import android.util.Log
 import com.divpundir.mavlink.definitions.common.MavParamType
-import com.example.pavamanconfiguratorgcs.data.ParameterRepository
 import com.example.pavamanconfiguratorgcs.data.models.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -70,7 +69,7 @@ class FrameTypeRepository(
 
                 val maxAttempts = 5
                 var attempt = 0
-                var fetched: Map<String, com.example.pavamanconfiguratorgcs.data.ParameterRepository.ParameterValue> = emptyMap()
+                var fetched: Map<String, ParameterRepository.ParameterValue> = emptyMap()
 
                 while (attempt < maxAttempts && fetched.isEmpty()) {
                     attempt++
@@ -145,8 +144,8 @@ class FrameTypeRepository(
             val config = when {
                 // Prefer CLASS_TYPE scheme if both params present
                 hasFrameClass && hasFrameType -> {
-                    val frameClass = frameClassParam!!.value
-                    val frameType = frameTypeParam!!.value
+                    val frameClass = frameClassParam.value
+                    val frameType = frameTypeParam.value
                     val detectedFrame = ClassTypeFrameMapping.valuesToFrameType(frameClass, frameType)
 
                     Log.d(TAG, "✅ Detected CLASS_TYPE scheme: FRAME_CLASS=$frameClass, FRAME_TYPE=$frameType -> $detectedFrame")
@@ -162,7 +161,7 @@ class FrameTypeRepository(
                 }
                 // Use legacy FRAME parameter
                 hasFrame -> {
-                    val frameValue = frameParam!!.value
+                    val frameValue = frameParam.value
                     val detectedFrame = LegacyFrameMapping.valueToFrameType(frameValue)
 
                     Log.d(TAG, "✅ Detected LEGACY_FRAME scheme: FRAME=$frameValue -> $detectedFrame")
@@ -239,7 +238,8 @@ class FrameTypeRepository(
                     val result = parameterRepository.setParameter(
                         paramName = PARAM_FRAME,
                         value = frameValue.toFloat(),
-                        paramType = MavParamType.UINT8
+                        paramType = MavParamType.UINT8,
+                        force = true // Force the write even if cached value matches
                     )
 
                     when (result) {
@@ -247,7 +247,23 @@ class FrameTypeRepository(
                             Log.i(TAG, "✅ FRAME parameter set to $frameValue")
                             // Clear any previous error state
                             _error.value = null
-                            updateFrameConfig(newFrameType, rebootRequired = true)
+
+                            // Update frame config with new values
+                            _frameConfig.update { current ->
+                                current.copy(
+                                    currentFrameType = newFrameType,
+                                    frameParamValue = frameValue.toFloat(),
+                                    rebootRequired = true,
+                                    isDetected = true
+                                )
+                            }
+
+                            // Small delay to allow parameter to propagate
+                            delay(300)
+
+                            // Re-detect to confirm the change
+                            detectFrameParameters()
+
                             Result.success(Unit)
                         }
                         is ParameterRepository.ParameterResult.Error -> {
@@ -271,7 +287,8 @@ class FrameTypeRepository(
                     val classResult = parameterRepository.setParameter(
                         paramName = PARAM_FRAME_CLASS,
                         value = values.frameClass.toFloat(),
-                        paramType = MavParamType.UINT8
+                        paramType = MavParamType.UINT8,
+                        force = true // Force the write
                     )
 
                     if (classResult !is ParameterRepository.ParameterResult.Success) {
@@ -287,13 +304,14 @@ class FrameTypeRepository(
                     Log.d(TAG, "✅ FRAME_CLASS set to ${values.frameClass}")
 
                     // Small delay between parameter writes
-                    delay(200)
+                    delay(300)
 
                     // Set FRAME_TYPE
                     val typeResult = parameterRepository.setParameter(
                         paramName = PARAM_FRAME_TYPE,
                         value = values.frameType.toFloat(),
-                        paramType = MavParamType.UINT8
+                        paramType = MavParamType.UINT8,
+                        force = true // Force the write
                     )
 
                     when (typeResult) {
@@ -301,7 +319,24 @@ class FrameTypeRepository(
                             Log.i(TAG, "✅ FRAME_TYPE set to ${values.frameType}")
                             // Clear any previous error state
                             _error.value = null
-                            updateFrameConfig(newFrameType, rebootRequired = true)
+
+                            // Update frame config with new values
+                            _frameConfig.update { current ->
+                                current.copy(
+                                    currentFrameType = newFrameType,
+                                    frameClassValue = values.frameClass.toFloat(),
+                                    frameTypeValue = values.frameType.toFloat(),
+                                    rebootRequired = true,
+                                    isDetected = true
+                                )
+                            }
+
+                            // Small delay to allow parameters to propagate
+                            delay(300)
+
+                            // Re-detect to confirm the changes
+                            detectFrameParameters()
+
                             Result.success(Unit)
                         }
                         is ParameterRepository.ParameterResult.Error -> {
@@ -345,11 +380,11 @@ class FrameTypeRepository(
     /**
      * Update internal frame config state
      */
-    private fun updateFrameConfig(newFrameType: FrameType, rebootRequired: Boolean) {
+    private fun updateFrameConfig(newFrameType: FrameType) {
         _frameConfig.update { current ->
             current.copy(
                 currentFrameType = newFrameType,
-                rebootRequired = rebootRequired
+                rebootRequired = true
             )
         }
     }

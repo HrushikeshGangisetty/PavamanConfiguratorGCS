@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +51,23 @@ fun FrameTypeScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
+                actions = {
+                    // Refresh button
+                    IconButton(
+                        onClick = {
+                            viewModel.clearError()
+                            viewModel.clearMessage()
+                            viewModel.detectFrameParameters()
+                        },
+                        enabled = !isLoading && fcuDetected
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh",
+                            tint = Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF535350),
                     titleContentColor = Color.White
@@ -70,8 +88,9 @@ fun FrameTypeScreen(
 
             Text(
                 text = "Current: ${frameConfig.getStatusDescription()}",
-                color = Color.LightGray,
-                fontSize = 14.sp
+                color = if (frameConfig.isDetected) Color(0xFF4CAF50) else Color.LightGray,
+                fontSize = 14.sp,
+                fontWeight = if (frameConfig.isDetected) FontWeight.Bold else FontWeight.Normal
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -85,7 +104,7 @@ fun FrameTypeScreen(
                     title = "Quad-X",
                     isSelected = frameConfig.currentFrameType == FrameType.QUAD_X,
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading
+                    enabled = !isLoading && frameConfig.isDetected
                 ) {
                     viewModel.changeFrameType(FrameType.QUAD_X)
                 }
@@ -93,7 +112,7 @@ fun FrameTypeScreen(
                     title = "Hexa-X",
                     isSelected = frameConfig.currentFrameType == FrameType.HEXA_X,
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading
+                    enabled = !isLoading && frameConfig.isDetected
                 ) {
                     viewModel.changeFrameType(FrameType.HEXA_X)
                 }
@@ -101,7 +120,7 @@ fun FrameTypeScreen(
                     title = "Octa-X",
                     isSelected = frameConfig.currentFrameType == FrameType.OCTA_X,
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading
+                    enabled = !isLoading && frameConfig.isDetected
                 ) {
                     viewModel.changeFrameType(FrameType.OCTA_X)
                 }
@@ -134,7 +153,7 @@ fun FrameTypeScreen(
                             onClick = { viewModel.acknowledgeReboot() },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White)
                         ) {
-                            Text("Rebooted", color = Color(0xFFFF6B35))
+                            Text("I've Rebooted", color = Color(0xFFFF6B35))
                         }
                     }
                 }
@@ -182,54 +201,61 @@ fun FrameTypeScreen(
 
             // Status Messages
             if (isLoading) {
-                Row(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2C2A)),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Loading...", color = Color.White)
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Processing...", color = Color.White)
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // Error Message (only show when frame parameters are not detected)
-            if (!frameConfig.isDetected) {
-                error?.let { errorMsg ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
-                        shape = RoundedCornerShape(8.dp)
+            // Error Message (show when there's an error)
+            error?.let { errorMsg ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "❌ Error: $errorMsg",
-                                color = Color.White,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(onClick = { viewModel.clearError() }) {
-                                Text("Dismiss", color = Color.White)
-                            }
+                        Text(
+                            text = "❌ $errorMsg",
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { viewModel.clearError() }) {
+                            Text("Dismiss", color = Color.White)
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             // UI Message
             uiMessage?.let { msg ->
-                Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (msg.contains("success", ignoreCase = true))
-                            Color(0xFF4CAF50)
-                        else
-                            Color(0xFF2196F3)
+                        containerColor = when {
+                            msg.contains("success", ignoreCase = true) -> Color(0xFF4CAF50)
+                            msg.contains("detected", ignoreCase = true) -> Color(0xFF2196F3)
+                            msg.contains("failed", ignoreCase = true) -> Color(0xFFFF6B35)
+                            else -> Color(0xFF2196F3)
+                        }
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -252,13 +278,13 @@ fun FrameTypeScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             // Info Text
-            if (!frameConfig.isDetected) {
+            if (!frameConfig.isDetected && !isLoading) {
                 Text(
-                    text = "Frame parameters not detected. Ensure parameters are loaded.",
-                    color = Color.LightGray,
+                    text = "⚠️ Frame parameters not detected. Ensure parameters are loaded and tap refresh.",
+                    color = Color(0xFFFF9800),
                     fontSize = 12.sp
                 )
-            } else {
+            } else if (frameConfig.isDetected) {
                 Text(
                     text = "Parameter scheme: ${frameConfig.paramScheme.name}",
                     color = Color.LightGray,

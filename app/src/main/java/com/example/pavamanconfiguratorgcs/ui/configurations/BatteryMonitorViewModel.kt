@@ -4,7 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.divpundir.mavlink.definitions.common.MavParamType
-import com.example.pavamanconfiguratorgcs.data.ParameterRepository
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -278,4 +278,3 @@ class BatteryMonitorViewModel(
         Log.d(TAG, "BatteryMonitorViewModel cleared")
     }
 }
-

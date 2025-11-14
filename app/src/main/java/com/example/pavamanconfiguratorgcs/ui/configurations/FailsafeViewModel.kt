@@ -9,7 +9,7 @@ import com.divpundir.mavlink.definitions.common.RcChannels
 import com.divpundir.mavlink.definitions.common.ServoOutputRaw
 import com.divpundir.mavlink.definitions.minimal.Heartbeat
 import com.divpundir.mavlink.definitions.minimal.MavModeFlag
-import com.example.pavamanconfiguratorgcs.data.ParameterRepository
+import com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

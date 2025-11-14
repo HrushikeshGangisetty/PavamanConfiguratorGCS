@@ -108,12 +108,17 @@ class RCChannelsHelper(
         val paramValues = mutableMapOf<String, Int>()
 
         params.forEach { paramName ->
-            val result = parameterRepository.requestParameter(paramName)
-            result.onSuccess { parameter ->
-                paramValues[paramName] = parameter.value.toInt()
-                Log.d(TAG, "✓ Received $paramName = ${parameter.value.toInt()}")
-            }.onFailure { error ->
-                Log.e(TAG, "Error loading $paramName: ${error.message}")
+            when (val result = parameterRepository.requestParameter(paramName)) {
+                is ParameterRepository.ParameterResult.Success -> {
+                    paramValues[paramName] = result.parameter.value.toInt()
+                    Log.d(TAG, "✓ Received $paramName = ${result.parameter.value.toInt()}")
+                }
+                is ParameterRepository.ParameterResult.Error -> {
+                    Log.e(TAG, "Error loading $paramName: ${result.message}")
+                }
+                is ParameterRepository.ParameterResult.Timeout -> {
+                    Log.e(TAG, "Timeout loading $paramName")
+                }
             }
             delay(100)
         }
@@ -138,40 +143,60 @@ class RCChannelsHelper(
         try {
             // Get the parameter type from existing parameter
             val existingParam = parameterRepository.requestParameter("RC${channelNumber}_MIN")
-            val paramType = existingParam.getOrNull()?.type
-                ?: com.divpundir.mavlink.definitions.common.MavParamType.REAL32.wrap()
+            val paramType = when (existingParam) {
+                is ParameterRepository.ParameterResult.Success -> existingParam.parameter.type
+                else -> com.divpundir.mavlink.definitions.common.MavParamType.INT16
+            }
 
             // Save MIN
-            parameterRepository.setParameter("RC${channelNumber}_MIN", minValue.toFloat(), paramType)
-                .onSuccess {
+            val minResult = parameterRepository.setParameter(
+                "RC${channelNumber}_MIN",
+                minValue.toFloat(),
+                paramType
+            )
+            when (minResult) {
+                is ParameterRepository.ParameterResult.Success -> {
                     minSuccess = true
                     Log.d(TAG, "✓ Saved RC${channelNumber}_MIN = $minValue")
                 }
-                .onFailure {
+                else -> {
                     Log.e(TAG, "Failed to save RC${channelNumber}_MIN")
                 }
+            }
             delay(50)
 
             // Save MAX
-            parameterRepository.setParameter("RC${channelNumber}_MAX", maxValue.toFloat(), paramType)
-                .onSuccess {
+            val maxResult = parameterRepository.setParameter(
+                "RC${channelNumber}_MAX",
+                maxValue.toFloat(),
+                paramType
+            )
+            when (maxResult) {
+                is ParameterRepository.ParameterResult.Success -> {
                     maxSuccess = true
                     Log.d(TAG, "✓ Saved RC${channelNumber}_MAX = $maxValue")
                 }
-                .onFailure {
+                else -> {
                     Log.e(TAG, "Failed to save RC${channelNumber}_MAX")
                 }
+            }
             delay(50)
 
             // Save TRIM
-            parameterRepository.setParameter("RC${channelNumber}_TRIM", trimValue.toFloat(), paramType)
-                .onSuccess {
+            val trimResult = parameterRepository.setParameter(
+                "RC${channelNumber}_TRIM",
+                trimValue.toFloat(),
+                paramType
+            )
+            when (trimResult) {
+                is ParameterRepository.ParameterResult.Success -> {
                     trimSuccess = true
                     Log.d(TAG, "✓ Saved RC${channelNumber}_TRIM = $trimValue")
                 }
-                .onFailure {
+                else -> {
                     Log.e(TAG, "Failed to save RC${channelNumber}_TRIM")
                 }
+            }
             delay(50)
 
         } catch (e: Exception) {

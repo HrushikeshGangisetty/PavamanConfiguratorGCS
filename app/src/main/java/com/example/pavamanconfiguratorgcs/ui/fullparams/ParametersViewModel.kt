@@ -153,10 +153,10 @@ class ParametersViewModel(
             // Start loading
             _loadingProgress.value = LoadingProgress.Loading(0, 0)
 
-            // Request fresh parameters from flight controller
-            parameterRepository?.requestAllParameters()
+            // Request fresh parameters from flight controller with forceRefresh=true
+            parameterRepository?.requestAllParameters(forceRefresh = true)
 
-            Log.d(TAG, "Refreshing all parameters from flight controller")
+            Log.d(TAG, "Refreshing all parameters from flight controller (force refresh)")
         }
     }
 

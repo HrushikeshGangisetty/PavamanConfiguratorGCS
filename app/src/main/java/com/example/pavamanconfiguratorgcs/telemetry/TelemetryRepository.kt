@@ -176,14 +176,11 @@ class TelemetryRepository {
                                 Log.i(TAG, "🚀 Auto-loading parameters in background...")
                                 val paramRepo = getParameterRepository()
                                 val result = paramRepo.requestAllParameters()
-                                result.fold(
-                                    onSuccess = {
-                                        Log.i(TAG, "✅ Background parameter loading completed successfully")
-                                    },
-                                    onFailure = { error ->
-                                        Log.w(TAG, "⚠️ Background parameter loading failed: ${error.message}")
-                                    }
-                                )
+                                if (result.isNotEmpty()) {
+                                    Log.i(TAG, "✅ Background parameter loading completed successfully (${result.size} parameters)")
+                                } else {
+                                    Log.w(TAG, "⚠️ Background parameter loading returned empty result")
+                                }
                             } catch (e: Exception) {
                                 Log.e(TAG, "❌ Error during background parameter loading", e)
                             }

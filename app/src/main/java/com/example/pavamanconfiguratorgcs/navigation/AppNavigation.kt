@@ -192,7 +192,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         return EscCalibrationViewModel(telemetryRepository, parameterRepository) as T
                     }
                 }
@@ -212,7 +212,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         val frameTypeRepository = com.example.pavamanconfiguratorgcs.data.repository.FrameTypeRepository(parameterRepository)
                         return com.example.pavamanconfiguratorgcs.ui.configurations.FrameTypeViewModel(frameTypeRepository) as T
                     }
@@ -235,7 +235,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         return FlightModesViewModel(telemetryRepository, parameterRepository) as T
                     }
                 }
@@ -297,7 +297,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         return com.example.pavamanconfiguratorgcs.ui.configurations.MotorTestViewModel(telemetryRepository, parameterRepository) as T
                     }
                 }
@@ -314,7 +314,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         return com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeViewModel(telemetryRepository, parameterRepository) as T
                     }
                 }
@@ -331,7 +331,7 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        val parameterRepository = com.example.pavamanconfiguratorgcs.data.ParameterRepository(telemetryRepository)
+                        val parameterRepository = telemetryRepository.getParameterRepository()
                         return com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorViewModel(
                             telemetryRepository,
                             parameterRepository
