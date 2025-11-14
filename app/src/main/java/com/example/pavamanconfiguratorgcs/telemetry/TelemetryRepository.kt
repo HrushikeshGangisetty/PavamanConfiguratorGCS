@@ -170,11 +170,24 @@ class TelemetryRepository {
                         _droneHeartbeatReceived.value = true
                         _connectionState.value = ConnectionState.Connected
 
-                        // NOTE: Do not auto-request parameters here. Parameter fetching is handled
-                        // by the ParameterRepository instances used by consumers (e.g. FrameTypeRepository).
-                        // Previously an automatic fetch here used a different ParameterRepository type
-                        // (com.example.pavamanconfiguratorgcs.data.repository.ParameterRepository)
-                        // which led to cache mismatches and detection failures.
+                        // Automatically initialize ParameterRepository and load all parameters in background
+                        scope.launch {
+                            try {
+                                Log.i(TAG, "🚀 Auto-loading parameters in background...")
+                                val paramRepo = getParameterRepository()
+                                val result = paramRepo.requestAllParameters()
+                                result.fold(
+                                    onSuccess = {
+                                        Log.i(TAG, "✅ Background parameter loading completed successfully")
+                                    },
+                                    onFailure = { error ->
+                                        Log.w(TAG, "⚠️ Background parameter loading failed: ${error.message}")
+                                    }
+                                )
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ Error during background parameter loading", e)
+                            }
+                        }
                     } else if (!_droneHeartbeatReceived.value) {
                         // FCU was detected before but heartbeat was lost, now it's back
                         Log.i(TAG, "FCU heartbeat resumed")

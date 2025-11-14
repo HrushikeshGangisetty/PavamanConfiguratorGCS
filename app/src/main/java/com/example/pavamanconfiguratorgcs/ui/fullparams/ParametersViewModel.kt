@@ -86,10 +86,10 @@ class ParametersViewModel(
     }
 
     private fun initializeParameterRepository() {
-        val connection = telemetryRepository.connection
-
-        if (connection != null) {
-            parameterRepository = ParameterRepository(connection, viewModelScope)
+        // Use the shared ParameterRepository from TelemetryRepository
+        // This ensures we reuse parameters that were already loaded in the background
+        try {
+            parameterRepository = telemetryRepository.getParameterRepository()
 
             // Observe parameter updates
             viewModelScope.launch {
@@ -111,12 +111,27 @@ class ParametersViewModel(
                 }
             }
 
-            // Auto-fetch parameters once on initialization
-            if (!hasLoadedInitially) {
-                hasLoadedInitially = true
-                fetchParameters()
-                Log.d(TAG, "Auto-fetching parameters on first initialization")
+            // Check if parameters are already loaded (from background loading)
+            viewModelScope.launch {
+                // Give it a moment to check the current state
+                kotlinx.coroutines.delay(500)
+
+                val currentParams = parameterRepository?.parameters?.value
+                if (currentParams.isNullOrEmpty() && !hasLoadedInitially) {
+                    // Parameters not loaded yet, fetch them
+                    hasLoadedInitially = true
+                    fetchParameters()
+                    Log.d(TAG, "Parameters not loaded yet, fetching...")
+                } else if (!currentParams.isNullOrEmpty()) {
+                    // Parameters already loaded from background
+                    hasLoadedInitially = true
+                    Log.d(TAG, "Parameters already loaded in background (${currentParams.size} params)")
+                }
             }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing parameter repository", e)
+            _editState.value = EditState.Error("Failed to initialize: ${e.message}")
         }
     }
 
