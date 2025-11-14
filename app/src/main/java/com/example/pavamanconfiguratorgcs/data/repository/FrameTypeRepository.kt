@@ -7,6 +7,8 @@ import com.example.pavamanconfiguratorgcs.data.models.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+import java.util.Locale
+
 /**
  * Repository for managing frame type configuration via MAVLink parameters
  * Supports both legacy FRAME and newer FRAME_CLASS+FRAME_TYPE parameter schemes
@@ -53,6 +55,14 @@ class FrameTypeRepository(
 
             // Get all parameters from cache
             var allParams = parameterRepository.getCachedParametersSnapshot()
+
+            Log.d(TAG, "📊 Total parameters in cache: ${allParams.size}")
+
+            // Log first few parameter names to debug
+            if (allParams.isNotEmpty()) {
+                val sampleParams = allParams.keys.take(10).joinToString(", ")
+                Log.d(TAG, "Sample parameter names: $sampleParams")
+            }
 
             // If cache is empty, attempt to request parameters from the FCU with retries
             if (allParams.isEmpty()) {
@@ -102,18 +112,41 @@ class FrameTypeRepository(
                 return@withContext Result.failure(Exception("Parameters not loaded"))
             }
 
-            // Check which scheme is available
-            val hasFrame = allParams.containsKey(PARAM_FRAME)
-            val hasFrameClass = allParams.containsKey(PARAM_FRAME_CLASS)
-            val hasFrameType = allParams.containsKey(PARAM_FRAME_TYPE)
+            // Create a case-insensitive lookup map
+            val paramLookup = allParams.mapKeys { it.key.uppercase(Locale.ROOT) }
+
+            // Helper function to find parameter with case-insensitive lookup
+            fun findParam(name: String): ParameterRepository.ParameterValue? {
+                val upperName = name.uppercase(Locale.ROOT)
+                return paramLookup[upperName]
+            }
+
+            // Look for FRAME-related parameters in the cache
+            val frameRelatedParams = paramLookup.filterKeys { key ->
+                key.contains("FRAME")
+            }
+
+            Log.d(TAG, "🔍 Found ${frameRelatedParams.size} FRAME-related parameters:")
+            frameRelatedParams.keys.forEach { key ->
+                Log.d(TAG, "  - $key = ${frameRelatedParams[key]?.value}")
+            }
+
+            // Check which scheme is available using case-insensitive lookup
+            val frameParam = findParam(PARAM_FRAME)
+            val frameClassParam = findParam(PARAM_FRAME_CLASS)
+            val frameTypeParam = findParam(PARAM_FRAME_TYPE)
+
+            val hasFrame = frameParam != null
+            val hasFrameClass = frameClassParam != null
+            val hasFrameType = frameTypeParam != null
 
             Log.d(TAG, "Parameter detection: FRAME=$hasFrame, FRAME_CLASS=$hasFrameClass, FRAME_TYPE=$hasFrameType")
 
             val config = when {
                 // Prefer CLASS_TYPE scheme if both params present
                 hasFrameClass && hasFrameType -> {
-                    val frameClass = allParams[PARAM_FRAME_CLASS]!!.value
-                    val frameType = allParams[PARAM_FRAME_TYPE]!!.value
+                    val frameClass = frameClassParam!!.value
+                    val frameType = frameTypeParam!!.value
                     val detectedFrame = ClassTypeFrameMapping.valuesToFrameType(frameClass, frameType)
 
                     Log.d(TAG, "✅ Detected CLASS_TYPE scheme: FRAME_CLASS=$frameClass, FRAME_TYPE=$frameType -> $detectedFrame")
@@ -129,7 +162,7 @@ class FrameTypeRepository(
                 }
                 // Use legacy FRAME parameter
                 hasFrame -> {
-                    val frameValue = allParams[PARAM_FRAME]!!.value
+                    val frameValue = frameParam!!.value
                     val detectedFrame = LegacyFrameMapping.valueToFrameType(frameValue)
 
                     Log.d(TAG, "✅ Detected LEGACY_FRAME scheme: FRAME=$frameValue -> $detectedFrame")
@@ -143,8 +176,15 @@ class FrameTypeRepository(
                     )
                 }
                 else -> {
-                    Log.w(TAG, "⚠️ No frame parameters found")
-                    _error.value = "Frame parameters not found on this vehicle"
+                    // Try to find any parameter with "FRAME" in the name as a last resort
+                    if (frameRelatedParams.isNotEmpty()) {
+                        Log.w(TAG, "⚠️ Found FRAME-related parameters but couldn't map to known scheme")
+                        _error.value = "Frame parameters found but format not recognized. Found: ${frameRelatedParams.keys.joinToString(", ")}"
+                    } else {
+                        Log.w(TAG, "⚠️ No frame parameters found in ${allParams.size} loaded parameters")
+                        _error.value = "Frame parameters not found on this vehicle"
+                    }
+
                     FrameConfig(
                         currentFrameType = null,
                         paramScheme = FrameParamScheme.UNKNOWN,
@@ -155,10 +195,9 @@ class FrameTypeRepository(
 
             _frameConfig.value = config
 
-            // Clear any previous errors on successful detection
-            _error.value = null
-
-            if (config.isValid) {
+            // Only clear error if we successfully detected parameters
+            if (config.isDetected) {
+                _error.value = null
                 Log.i(TAG, "✅ Frame detection complete: ${config.currentFrameType?.displayName}")
             }
 

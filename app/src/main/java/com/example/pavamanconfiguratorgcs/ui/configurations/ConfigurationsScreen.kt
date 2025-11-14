@@ -33,7 +33,9 @@ fun ConfigurationsScreen(
     onNavigateToBatteryMonitor: () -> Unit = {},
     onNavigateToCompassCalibration: () -> Unit = {},
     onNavigateToRCCalibration: () -> Unit = {},
-    onNavigateToIMUCalibration: () -> Unit = {}
+    onNavigateToIMUCalibration: () -> Unit = {},
+    onNavigateToHWID: () -> Unit = {},
+    onNavigateToBarometer: () -> Unit = {}
 ) {
     Scaffold(
         topBar = {
@@ -67,14 +69,6 @@ fun ConfigurationsScreen(
                 .padding(padding)
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            Text(
-                text = "Configurations",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
             // Scrollable list of configuration options
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -96,6 +90,8 @@ fun ConfigurationsScreen(
                                 "compass_calibration" -> onNavigateToCompassCalibration()
                                 "rc_calibration" -> onNavigateToRCCalibration()
                                 "imu_calibration" -> onNavigateToIMUCalibration()
+                                "hwid" -> onNavigateToHWID()
+                                "barometer_calibration" -> onNavigateToBarometer()
                                 // Handle other routes here
                             }
                         }
@@ -160,7 +156,8 @@ fun getConfigurationItems(): List<ConfigurationItem> {
         ConfigurationItem("Battery Monitor", "battery_monitor"),
         ConfigurationItem("Compass Calibration", "compass_calibration"),
         ConfigurationItem("RC Calibration", "rc_calibration"),
-        ConfigurationItem("IMU Calibration", "imu_calibration")
-        // Add more items here as needed
+        ConfigurationItem("IMU Calibration", "imu_calibration"),
+        ConfigurationItem("HWID", "hwid"),
+        ConfigurationItem("Barometer Calibration", "barometer_calibration")
     )
 }
