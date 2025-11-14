@@ -38,6 +38,9 @@ class ParameterRepository(
     private var expectedParamCount: UShort = 0u
     private val inFlightWrites = mutableSetOf<String>()
 
+    // Flag to prevent duplicate fetch requests
+    private var isFetching = false
+
     private var parameterJob: Job? = null
 
     // Metadata provider for parameter descriptions, units, etc.
@@ -62,13 +65,23 @@ class ParameterRepository(
      * Start listening for PARAM_VALUE messages from flight controller
      */
     private fun startListening() {
+        Log.d(TAG, "🎧 Starting ParamValue message listener...")
         parameterJob = scope.launch {
-            connection.mavFrame
-                .map { it.message }
-                .filterIsInstance<ParamValue>()
-                .collect { paramValue ->
-                    handleParamValue(paramValue)
-                }
+            try {
+                Log.d(TAG, "🎧 ParamValue collector launched, waiting for messages...")
+                connection.mavFrame
+                    .buffer(capacity = 2000) // Large buffer to handle rapid parameter influx
+                    .map { it.message }
+                    .filterIsInstance<ParamValue>()
+                    .collect { paramValue ->
+                        Log.v(TAG, "📨 ParamValue message received in collector")
+                        handleParamValue(paramValue)
+                    }
+                Log.d(TAG, "🎧 ParamValue collector completed (connection closed?)")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Error in ParamValue collector", e)
+                e.printStackTrace()
+            }
         }
     }
 
@@ -78,6 +91,19 @@ class ParameterRepository(
      */
     suspend fun requestAllParameters(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // Check if already fetching
+            if (isFetching) {
+                Log.d(TAG, "⏳ Parameter fetch already in progress, skipping duplicate request")
+                return@withContext Result.success(Unit)
+            }
+
+            // Check if parameters already loaded
+            if (_parameters.value.isNotEmpty() && expectedParamCount > 0u && receivedIndices.size >= expectedParamCount.toInt()) {
+                Log.d(TAG, "✅ Parameters already loaded (${_parameters.value.size} params), skipping fetch")
+                return@withContext Result.success(Unit)
+            }
+
+            isFetching = true
             Log.d(TAG, "📋 Requesting all parameters...")
 
             // **CRITICAL**: Load metadata FIRST before requesting parameters
@@ -105,9 +131,11 @@ class ParameterRepository(
             // Wait for completion
             waitForParameterCompletion()
 
+            isFetching = false
             Result.success(Unit)
 
         } catch (e: Exception) {
+            isFetching = false
             Log.e(TAG, "❌ Failed to request parameters", e)
             _loadingProgress.value = LoadingProgress(
                 current = receivedIndices.size,
@@ -184,6 +212,11 @@ class ParameterRepository(
             // Extract parameter name (remove null terminators)
             val paramName = paramValue.paramId.trimEnd('\u0000')
 
+            // DEBUG: Log every parameter received for first 10
+            if (receivedIndices.size < 10) {
+                Log.d(TAG, "📨 RAW ParamValue received: name=$paramName, index=${paramValue.paramIndex}, value=${paramValue.paramValue}, count=${paramValue.paramCount}")
+            }
+
             // Check if this is a write confirmation
             if (inFlightWrites.contains(paramName)) {
                 inFlightWrites.remove(paramName)
@@ -230,9 +263,17 @@ class ParameterRepository(
             currentParams[paramName] = parameter
             _parameters.value = currentParams
 
-            // Track index
-            if (paramValue.paramIndex != 65535u.toUShort()) {
-                receivedIndices.add(paramValue.paramIndex)
+            // Track index (handle invalid index 65535)
+            val actualIndex = paramValue.paramIndex
+            if (actualIndex != 65535u.toUShort()) {
+                receivedIndices.add(actualIndex)
+                // Log every 10th parameter or first 10
+                if (receivedIndices.size <= 10 || receivedIndices.size % 10 == 0) {
+                    Log.d(TAG, "📥 Progress: ${receivedIndices.size}/${expectedParamCount}")
+                }
+            } else {
+                // Parameter with invalid index - still count it but log warning
+                Log.w(TAG, "⚠️ Parameter $paramName has invalid index 65535")
             }
 
             // Update progress
@@ -241,12 +282,9 @@ class ParameterRepository(
                 total = expectedParamCount.toInt()
             )
 
-            if (receivedIndices.size % 50 == 0) {
-                Log.d(TAG, "📥 Progress: ${receivedIndices.size}/${expectedParamCount}")
-            }
-
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error handling PARAM_VALUE", e)
+            e.printStackTrace()
         }
     }
 
@@ -256,9 +294,11 @@ class ParameterRepository(
     private suspend fun waitForParameterCompletion() {
         val startTime = System.currentTimeMillis()
         val overallTimeout = 120_000L // 2 minutes overall timeout
-        val noProgressTimeout = 10_000L // 10 seconds without new parameters
+        val noProgressTimeout = 5_000L // 5 seconds without new parameters (reduced for faster detection)
         var lastProgressTime = System.currentTimeMillis()
         var lastReceivedCount = 0
+        var recoveryAttempts = 0
+        val maxRecoveryAttempts = 3
 
         while (true) {
             delay(100)
@@ -269,6 +309,7 @@ class ParameterRepository(
             if (currentReceivedCount > lastReceivedCount) {
                 lastProgressTime = System.currentTimeMillis()
                 lastReceivedCount = currentReceivedCount
+                recoveryAttempts = 0 // Reset recovery attempts when we make progress
 
                 // Log progress every 50 parameters
                 if (currentReceivedCount % 50 == 0 && expectedParamCount > 0u) {
@@ -287,51 +328,38 @@ class ParameterRepository(
                 break
             }
 
-            // Check no-progress timeout (no new parameters for 10 seconds)
+            // Check no-progress timeout (no new parameters for 5 seconds)
             val timeSinceProgress = System.currentTimeMillis() - lastProgressTime
-            if (expectedParamCount > 0u && timeSinceProgress > noProgressTimeout) {
+            if (expectedParamCount > 0u && timeSinceProgress > noProgressTimeout && recoveryAttempts < maxRecoveryAttempts) {
                 val missing = expectedParamCount.toInt() - receivedIndices.size
-                Log.w(TAG, "⏱️ No progress timeout: Received ${receivedIndices.size}/${expectedParamCount}, Missing: $missing")
+                Log.w(TAG, "⏱️ No progress timeout (attempt ${recoveryAttempts + 1}/$maxRecoveryAttempts): Received ${receivedIndices.size}/${expectedParamCount}, Missing: $missing")
 
-                // Request missing parameters
-                if (missing > 0) {
+                // If we got very few parameters, the FC might not be responding to PARAM_REQUEST_LIST properly
+                if (receivedIndices.size < 10 && recoveryAttempts == 0) {
+                    Log.w(TAG, "⚠️ Very few parameters received. FC may not support PARAM_REQUEST_LIST properly.")
+                    Log.i(TAG, "🔄 Requesting parameters individually by index...")
+                    requestParametersByIndex(0, minOf(100, expectedParamCount.toInt()))
+                } else {
+                    // Request missing parameters
                     Log.i(TAG, "🔄 Attempting to recover $missing missing parameters...")
                     requestMissingParameters()
-
-                    // Reset progress timer and wait for recovery
-                    lastProgressTime = System.currentTimeMillis()
-                    delay(5000) // Wait 5 seconds for missing params to arrive
-
-                    // Check if we got them all now
-                    if (receivedIndices.size >= expectedParamCount.toInt()) {
-                        _loadingProgress.value = LoadingProgress(
-                            current = receivedIndices.size,
-                            total = expectedParamCount.toInt(),
-                            isComplete = true
-                        )
-                        Log.i(TAG, "✅ All parameters received after recovery: ${receivedIndices.size}/${expectedParamCount}")
-                        break
-                    }
-
-                    // If still missing some, try one more time
-                    val stillMissing = expectedParamCount.toInt() - receivedIndices.size
-                    if (stillMissing > 0 && stillMissing < 100) {
-                        Log.i(TAG, "🔄 Second recovery attempt for $stillMissing parameters...")
-                        requestMissingParameters()
-                        lastProgressTime = System.currentTimeMillis()
-                        delay(5000)
-                    }
                 }
 
-                // Final check after recovery attempts
+                recoveryAttempts++
+                lastProgressTime = System.currentTimeMillis()
+                delay(5000) // Wait 5 seconds for missing params to arrive
+            }
+
+            // After max recovery attempts, give up
+            if (recoveryAttempts >= maxRecoveryAttempts) {
                 val finalMissing = expectedParamCount.toInt() - receivedIndices.size
                 if (finalMissing > 0) {
-                    Log.w(TAG, "⚠️ Incomplete: Received ${receivedIndices.size}/${expectedParamCount}, Still missing: $finalMissing")
+                    Log.w(TAG, "⚠️ Incomplete after $maxRecoveryAttempts attempts: Received ${receivedIndices.size}/${expectedParamCount}, Still missing: $finalMissing")
                     _loadingProgress.value = LoadingProgress(
                         current = receivedIndices.size,
                         total = expectedParamCount.toInt(),
                         isComplete = false,
-                        errorMessage = "Incomplete: $finalMissing parameters missing"
+                        errorMessage = "Incomplete: $finalMissing parameters missing after $maxRecoveryAttempts attempts"
                     )
                 } else {
                     _loadingProgress.value = LoadingProgress(
@@ -356,6 +384,29 @@ class ParameterRepository(
                 )
                 break
             }
+        }
+    }
+
+    /**
+     * Request parameters by index range (useful when PARAM_REQUEST_LIST doesn't work)
+     */
+    private suspend fun requestParametersByIndex(startIndex: Int, endIndex: Int) {
+        Log.d(TAG, "🔄 Requesting parameters by index: $startIndex to $endIndex")
+        for (index in startIndex until endIndex) {
+            val request = ParamRequestRead(
+                targetSystem = TARGET_SYSTEM,
+                targetComponent = TARGET_COMPONENT,
+                paramId = "",
+                paramIndex = index.toShort()
+            )
+
+            connection.sendUnsignedV2(
+                systemId = GCS_SYSTEM,
+                componentId = GCS_COMPONENT,
+                payload = request
+            )
+
+            delay(20) // Small delay between requests to avoid overwhelming the FC
         }
     }
 
