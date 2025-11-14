@@ -223,22 +223,38 @@ class ConnectionViewModel(
         val driver = usbDriverMap[usbDevice.deviceId]
         if (driver == null) {
             Log.e(TAG, "USB driver not found for device ${usbDevice.deviceId}")
+            viewModelScope.launch(Dispatchers.Main) {
+                telemetryRepository.setConnectionError("USB driver not found for device")
+            }
             return
         }
 
+        Log.d(TAG, "Attempting to open USB device: ${usbDevice.deviceName} (VID: ${usbDevice.vendorId}, PID: ${usbDevice.productId})")
+
         val connection = usbManager.openDevice(usbDevice)
         if (connection == null) {
-            Log.e(TAG, "Failed to open USB device")
+            Log.e(TAG, "Failed to open USB device - openDevice returned null")
+            viewModelScope.launch(Dispatchers.Main) {
+                telemetryRepository.setConnectionError("Failed to open USB device. Check USB permissions.")
+            }
             return
         }
 
         try {
+            Log.d(TAG, "USB device opened successfully")
             Log.d(TAG, "Connecting to USB device: ${usbDevice.productName} at ${_baudRate.value} baud")
+            Log.d(TAG, "Driver ports available: ${driver.ports.size}")
+
             val connectionProvider = UsbSerialConnectionProvider(driver, connection, _baudRate.value)
             val result = telemetryRepository.connect(connectionProvider)
 
+            result.onSuccess {
+                Log.d(TAG, "USB connection successful")
+            }
+
             result.onFailure { error ->
                 Log.e(TAG, "USB connection failed: ${error.message}", error)
+                connection.close()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during USB connection", e)

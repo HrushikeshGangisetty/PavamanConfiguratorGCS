@@ -1,6 +1,7 @@
 package com.example.pavamanconfiguratorgcs.telemetry.connections
 
 import android.hardware.usb.UsbDeviceConnection
+import android.util.Log
 import com.divpundir.mavlink.api.MavFrame
 import com.divpundir.mavlink.api.MavMessage
 import com.divpundir.mavlink.connection.BufferedMavConnection
@@ -27,18 +28,50 @@ class UsbSerialMavConnection(
     private val parity: Int = UsbSerialPort.PARITY_NONE
 ) : MavConnection {
 
+    companion object {
+        private const val TAG = "UsbSerialMavConnection"
+    }
+
     private var bufferedConnection: BufferedMavConnection? = null
+    private var isPortOpen = false
 
     @Throws(IOException::class)
     override fun connect() {
         if (bufferedConnection != null) {
+            Log.d(TAG, "Connection already exists, closing first")
             close()
         }
 
         try {
+            Log.d(TAG, "Opening USB serial port with baud rate: $baudRate")
+
+            // Check if port is already open
+            if (isPortOpen) {
+                Log.w(TAG, "Port already open, closing first")
+                try {
+                    port.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing already open port", e)
+                }
+                isPortOpen = false
+            }
+
             // Open the USB serial port
             port.open(connection)
+            isPortOpen = true
+            Log.d(TAG, "USB port opened successfully")
+
+            // Set serial port parameters
             port.setParameters(baudRate, dataBits, stopBits, parity)
+            Log.d(TAG, "USB port parameters set: baud=$baudRate, data=$dataBits, stop=$stopBits, parity=$parity")
+
+            // Purge any stale data
+            try {
+                port.purgeHwBuffers(true, true)
+                Log.d(TAG, "USB buffers purged")
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not purge buffers (may not be supported)", e)
+            }
 
             // Create InputStream wrapper for the USB serial port
             val inputStream = UsbSerialInputStream(port)
@@ -53,25 +86,39 @@ class UsbSerialMavConnection(
                 port, // The port is the closeable resource
                 ArdupilotmegaDialect
             )
+
+            Log.d(TAG, "USB MAVLink connection initialized successfully")
         } catch (e: IOException) {
+            Log.e(TAG, "Failed to open USB connection", e)
             close()
-            throw e
+            throw IOException("Failed to open USB serial port: ${e.message}", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unexpected error opening USB connection", e)
+            close()
+            throw IOException("Unexpected error: ${e.message}", e)
         }
     }
 
     @Throws(IOException::class)
     override fun close() {
+        Log.d(TAG, "Closing USB connection")
+
         try {
             bufferedConnection?.close()
+            Log.d(TAG, "Buffered connection closed")
         } catch (@Suppress("SwallowedException") e: IOException) {
-            // Safe to ignore exceptions during close
+            Log.w(TAG, "Error closing buffered connection", e)
         }
         bufferedConnection = null
 
-        try {
-            port.close()
-        } catch (@Suppress("SwallowedException") e: IOException) {
-            // Safe to ignore
+        if (isPortOpen) {
+            try {
+                port.close()
+                isPortOpen = false
+                Log.d(TAG, "USB port closed")
+            } catch (@Suppress("SwallowedException") e: IOException) {
+                Log.w(TAG, "Error closing USB port", e)
+            }
         }
     }
 
@@ -113,17 +160,27 @@ class UsbSerialMavConnection(
         private val READ_TIMEOUT_MS = 1000
 
         override fun read(): Int {
-            val bytesRead = port.read(buffer, READ_TIMEOUT_MS)
-            return if (bytesRead > 0) buffer[0].toInt() and 0xFF else -1
+            return try {
+                val bytesRead = port.read(buffer, READ_TIMEOUT_MS)
+                if (bytesRead > 0) buffer[0].toInt() and 0xFF else -1
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reading from USB port", e)
+                throw IOException("USB read error: ${e.message}", e)
+            }
         }
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
-            val tempBuffer = ByteArray(len)
-            val bytesRead = port.read(tempBuffer, READ_TIMEOUT_MS)
-            if (bytesRead > 0) {
-                System.arraycopy(tempBuffer, 0, b, off, bytesRead)
+            return try {
+                val tempBuffer = ByteArray(len)
+                val bytesRead = port.read(tempBuffer, READ_TIMEOUT_MS)
+                if (bytesRead > 0) {
+                    System.arraycopy(tempBuffer, 0, b, off, bytesRead)
+                }
+                bytesRead
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reading from USB port", e)
+                throw IOException("USB read error: ${e.message}", e)
             }
-            return bytesRead
         }
     }
 
@@ -134,16 +191,26 @@ class UsbSerialMavConnection(
         private val WRITE_TIMEOUT_MS = 1000
 
         override fun write(b: Int) {
-            port.write(byteArrayOf(b.toByte()), WRITE_TIMEOUT_MS)
+            try {
+                port.write(byteArrayOf(b.toByte()), WRITE_TIMEOUT_MS)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error writing to USB port", e)
+                throw IOException("USB write error: ${e.message}", e)
+            }
         }
 
         override fun write(b: ByteArray, off: Int, len: Int) {
-            val tempBuffer = if (off == 0 && len == b.size) {
-                b
-            } else {
-                b.copyOfRange(off, off + len)
+            try {
+                val tempBuffer = if (off == 0 && len == b.size) {
+                    b
+                } else {
+                    b.copyOfRange(off, off + len)
+                }
+                port.write(tempBuffer, WRITE_TIMEOUT_MS)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error writing to USB port", e)
+                throw IOException("USB write error: ${e.message}", e)
             }
-            port.write(tempBuffer, WRITE_TIMEOUT_MS)
         }
     }
 }

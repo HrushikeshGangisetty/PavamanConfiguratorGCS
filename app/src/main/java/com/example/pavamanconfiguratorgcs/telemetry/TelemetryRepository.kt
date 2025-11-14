@@ -326,6 +326,14 @@ class TelemetryRepository {
     }
 
     /**
+     * Set connection error state
+     */
+    fun setConnectionError(message: String) {
+        _connectionState.value = ConnectionState.Error(message)
+        Log.e(TAG, "Connection error: $message")
+    }
+
+    /**
      * Send a MAVLink command to the autopilot
      */
     suspend fun sendCommand(
