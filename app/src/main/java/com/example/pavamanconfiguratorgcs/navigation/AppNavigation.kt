@@ -41,6 +41,8 @@ sealed class Screen(val route: String) {
     object CompassCalibration : Screen("compass_calibration")
     object RCCalibration : Screen("rc_calibration")
     object IMUCalibration : Screen("imu_calibration")
+    object HWID : Screen("hwid")
+    object BarometerCalibration : Screen("barometer_calibration")
 }
 
 @Composable
@@ -122,6 +124,9 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToFullParams = {
                     navController.navigate(Screen.FullParams.route)
+                },
+                onNavigateToConnection = {
+                    navController.navigate(Screen.Connection.route)
                 }
             )
         }
@@ -163,6 +168,12 @@ fun AppNavigation(modifier: Modifier = Modifier) {
                 },
                 onNavigateToIMUCalibration = {
                     navController.navigate(Screen.IMUCalibration.route)
+                },
+                onNavigateToHWID = {
+                    navController.navigate(Screen.HWID.route)
+                },
+                onNavigateToBarometer = {
+                    navController.navigate(Screen.BarometerCalibration.route)
                 }
             )
         }
@@ -387,6 +398,45 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
             com.example.pavamanconfiguratorgcs.ui.configurations.IMUCalibrationScreen(
                 viewModel = imuCalibrationViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.HWID.route) {
+            // Create HWIDViewModel with dependencies
+            val hwidViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        val parameterRepository = telemetryRepository.getParameterRepository()
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.HWIDViewModel(parameterRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.HWIDScreen(
+                viewModel = hwidViewModel,
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.BarometerCalibration.route) {
+            // Create BarometerCalibrationViewModel with dependencies
+            val barometerCalibrationViewModel: com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationViewModel = viewModel(
+                factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+                    @Suppress("UNCHECKED_CAST")
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationViewModel(telemetryRepository) as T
+                    }
+                }
+            )
+
+            com.example.pavamanconfiguratorgcs.ui.configurations.BarometerCalibrationScreen(
+                viewModel = barometerCalibrationViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

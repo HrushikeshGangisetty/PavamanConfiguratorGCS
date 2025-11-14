@@ -23,6 +23,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onNavigateToConfigurations: () -> Unit,
     onNavigateToFullParams: () -> Unit,
+    onNavigateToConnection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val droneHeartbeatReceived by viewModel.droneHeartbeatReceived.collectAsStateWithLifecycle()
@@ -38,25 +39,48 @@ fun HomeScreen(
                 },
                 actions = {
                     // Connection Status Indicator
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        horizontalAlignment = Alignment.End,
                         modifier = Modifier.padding(end = 16.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .background(
-                                    color = if (droneHeartbeatReceived) Color(0xFF4CAF50) else Color(0xFFF44336),
-                                    shape = CircleShape
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .background(
+                                        color = if (droneHeartbeatReceived) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                        shape = CircleShape
+                                    )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (droneHeartbeatReceived) "Connected" else "Drone Disconnected",
+                                color = if (droneHeartbeatReceived) Color(0xFF4CAF50) else Color(0xFFF44336),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                        }
+
+                        // Show Reconnect button when disconnected
+                        if (!droneHeartbeatReceived) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Button(
+                                onClick = onNavigateToConnection,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFF44336)
+                                ),
+                                modifier = Modifier.height(32.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Reconnect",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (droneHeartbeatReceived) "Connected" else "Drone Disconnected",
-                            color = if (droneHeartbeatReceived) Color(0xFF4CAF50) else Color(0xFFF44336),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
