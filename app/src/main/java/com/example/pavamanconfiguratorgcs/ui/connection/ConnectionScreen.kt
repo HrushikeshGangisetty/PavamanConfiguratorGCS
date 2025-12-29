@@ -23,6 +23,10 @@ enum class ConnectionType {
     TCP, BLUETOOTH, USB
 }
 
+enum class TcpMode {
+    CLIENT, SERVER
+}
+
 data class PairedDevice(
     val name: String,
     val address: String
@@ -107,7 +111,9 @@ fun ConnectionScreen(
         ConnectionType.TCP -> {
             val ip by viewModel.ipAddress.collectAsStateWithLifecycle()
             val port by viewModel.port.collectAsStateWithLifecycle()
-            ip.isNotBlank() && port.isNotBlank()
+            val tcpMode by viewModel.tcpMode.collectAsStateWithLifecycle()
+            // Server mode only needs port, Client mode needs both IP and port
+            port.isNotBlank() && (tcpMode == TcpMode.SERVER || ip.isNotBlank())
         }
         ConnectionType.BLUETOOTH -> {
             val device by viewModel.selectedDevice.collectAsStateWithLifecycle()
@@ -217,26 +223,67 @@ fun ConnectionScreen(
 fun TcpConnectionContent(viewModel: ConnectionViewModel) {
     val ipAddress by viewModel.ipAddress.collectAsStateWithLifecycle()
     val port by viewModel.port.collectAsStateWithLifecycle()
+    val tcpMode by viewModel.tcpMode.collectAsStateWithLifecycle()
 
-    OutlinedTextField(
-        value = ipAddress,
-        onValueChange = { viewModel.onIpAddressChange(it) },
-        label = { Text("IP Address", color = Color.White) },
-        modifier = Modifier.fillMaxWidth(),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            focusedBorderColor = Color.White,
-            unfocusedBorderColor = Color.Gray
+    // TCP Mode Selector (Client/Server)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "TCP Mode",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium
         )
-    )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = tcpMode == TcpMode.CLIENT,
+                onClick = { viewModel.onTcpModeChange(TcpMode.CLIENT) },
+                label = { Text("Client") },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = tcpMode == TcpMode.SERVER,
+                onClick = { viewModel.onTcpModeChange(TcpMode.SERVER) },
+                label = { Text("Server") },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 
     Spacer(modifier = Modifier.height(12.dp))
+
+    // Show IP Address field only in Client mode
+    if (tcpMode == TcpMode.CLIENT) {
+        OutlinedTextField(
+            value = ipAddress,
+            onValueChange = { viewModel.onIpAddressChange(it) },
+            label = { Text("IP Address", color = Color.White) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = Color.White,
+                unfocusedBorderColor = Color.Gray
+            )
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+    } else {
+        // In Server mode, show a description
+        Text(
+            "Server mode: Waiting for drone to connect...",
+            color = Color.Gray,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+    }
 
     OutlinedTextField(
         value = port,
         onValueChange = { viewModel.onPortChange(it) },
-        label = { Text("Port", color = Color.White) },
+        label = { Text(if (tcpMode == TcpMode.CLIENT) "Port" else "Listen Port", color = Color.White) },
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,
