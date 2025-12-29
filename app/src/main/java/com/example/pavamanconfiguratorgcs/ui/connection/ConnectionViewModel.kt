@@ -21,6 +21,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import com.example.pavamanconfiguratorgcs.telemetry.connections.BluetoothConnectionProvider
 import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpConnectionProvider
+import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpServerConnectionProvider
+import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpMode
 import com.example.pavamanconfiguratorgcs.telemetry.connections.UsbSerialConnectionProvider
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -285,7 +287,7 @@ class ConnectionViewModel(
                             }
                             TcpMode.SERVER -> {
                                 Log.d(TAG, "Starting TCP Server on port: $portNum")
-                                com.example.pavamanconfiguratorgcs.telemetry.connections.TcpServerConnectionProvider(portNum)
+                                TcpServerConnectionProvider(portNum)
                             }
                         }
                         

@@ -15,16 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
+import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class ConnectionType {
     TCP, BLUETOOTH, USB
-}
-
-enum class TcpMode {
-    CLIENT, SERVER
 }
 
 data class PairedDevice(
