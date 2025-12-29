@@ -21,6 +21,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.pavamanconfiguratorgcs.telemetry.TelemetryRepository
 import com.example.pavamanconfiguratorgcs.telemetry.connections.BluetoothConnectionProvider
 import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpConnectionProvider
+import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpServerConnectionProvider
+import com.example.pavamanconfiguratorgcs.telemetry.connections.TcpMode
 import com.example.pavamanconfiguratorgcs.telemetry.connections.UsbSerialConnectionProvider
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -48,6 +50,10 @@ class ConnectionViewModel(
 
     private val _connectionType = MutableStateFlow(ConnectionType.TCP)
     val connectionType: StateFlow<ConnectionType> = _connectionType.asStateFlow()
+
+    // TCP mode: Client or Server
+    private val _tcpMode = MutableStateFlow(TcpMode.CLIENT)
+    val tcpMode: StateFlow<TcpMode> = _tcpMode.asStateFlow()
 
     private val _ipAddress = MutableStateFlow("10.0.2.2")
     val ipAddress: StateFlow<String> = _ipAddress.asStateFlow()
@@ -151,6 +157,10 @@ class ConnectionViewModel(
 
     fun onConnectionTypeChange(type: ConnectionType) {
         _connectionType.value = type
+    }
+
+    fun onTcpModeChange(mode: TcpMode) {
+        _tcpMode.value = mode
     }
 
     fun onIpAddressChange(ip: String) {
@@ -267,11 +277,20 @@ class ConnectionViewModel(
             try {
                 when (_connectionType.value) {
                     ConnectionType.TCP -> {
-                        val host = _ipAddress.value
                         val portNum = _port.value.toIntOrNull() ?: 5760
-                        Log.d(TAG, "Connecting to TCP: $host:$portNum")
-
-                        val connectionProvider = TcpConnectionProvider(host, portNum)
+                        
+                        val connectionProvider = when (_tcpMode.value) {
+                            TcpMode.CLIENT -> {
+                                val host = _ipAddress.value
+                                Log.d(TAG, "Connecting to TCP Client: $host:$portNum")
+                                TcpConnectionProvider(host, portNum)
+                            }
+                            TcpMode.SERVER -> {
+                                Log.d(TAG, "Starting TCP Server on port: $portNum")
+                                TcpServerConnectionProvider(portNum)
+                            }
+                        }
+                        
                         val result = telemetryRepository.connect(connectionProvider)
 
                         result.onFailure { error ->

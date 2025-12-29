@@ -2,28 +2,25 @@ package com.example.pavamanconfiguratorgcs.telemetry.connections
 
 import com.divpundir.mavlink.adapters.coroutines.CoroutinesMavConnection
 import com.divpundir.mavlink.adapters.coroutines.asCoroutine
-import com.divpundir.mavlink.connection.tcp.TcpClientMavConnection
+import com.divpundir.mavlink.connection.tcp.TcpServerMavConnection
 import com.divpundir.mavlink.definitions.ardupilotmega.ArdupilotmegaDialect
 
 /**
- * TCP Client Connection Provider
+ * TCP Server Connection Provider
  * 
- * Creates a TCP client connection that connects to a remote MAVLink server.
- * Used when connecting to networked telemetry modules or SITL simulators
- * that are running in server mode.
+ * Creates a TCP server that listens for incoming MAVLink connections.
+ * Useful for SITL (Software In The Loop) simulators or when the GCS
+ * needs to act as a server waiting for drone connections.
  * 
  * Following MSSV architecture pattern for connection abstraction.
  */
-class TcpConnectionProvider(
-    private val host: String,
+class TcpServerConnectionProvider(
     private val port: Int
 ) : MavConnectionProvider {
     override fun createConnection(): CoroutinesMavConnection {
-        return TcpClientMavConnection(
-            host,
+        return TcpServerMavConnection(
             port,
             ArdupilotmegaDialect
         ).asCoroutine()
     }
 }
-
