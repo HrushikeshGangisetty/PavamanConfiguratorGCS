@@ -22,6 +22,9 @@ class FrameTypeRepository(
         private const val PARAM_FRAME = "FRAME"
         private const val PARAM_FRAME_CLASS = "FRAME_CLASS"
         private const val PARAM_FRAME_TYPE = "FRAME_TYPE"
+        // QuadPlane parameter names
+        private const val PARAM_Q_FRAME_CLASS = "Q_FRAME_CLASS"
+        private const val PARAM_Q_FRAME_TYPE = "Q_FRAME_TYPE"
     }
 
     // Current frame configuration
@@ -131,21 +134,96 @@ class FrameTypeRepository(
             }
 
             // Check which scheme is available using case-insensitive lookup
-            val frameParam = findParam(PARAM_FRAME)
-            val frameClassParam = findParam(PARAM_FRAME_CLASS)
-            val frameTypeParam = findParam(PARAM_FRAME_TYPE)
+            var frameParam = findParam(PARAM_FRAME)
+            var frameClassParam = findParam(PARAM_FRAME_CLASS)
+            var frameTypeParam = findParam(PARAM_FRAME_TYPE)
+
+            // Also check for QuadPlane Q_FRAME_CLASS/Q_FRAME_TYPE in cache
+            var qFrameClassParam = findParam(PARAM_Q_FRAME_CLASS)
+            var qFrameTypeParam = findParam(PARAM_Q_FRAME_TYPE)
+
+            // If parameters not found in cache, try to request them directly from the FCU
+            if (frameClassParam == null) {
+                Log.d(TAG, "🔍 FRAME_CLASS not in cache, requesting directly from FCU...")
+                try {
+                    when (val result = parameterRepository.requestParameter(PARAM_FRAME_CLASS)) {
+                        is ParameterRepository.ParameterResult.Success -> {
+                            frameClassParam = result.parameter
+                            Log.d(TAG, "✅ Got FRAME_CLASS from FCU: ${result.parameter.value}")
+                        }
+                        else -> {
+                            Log.w(TAG, "⚠️ Could not fetch FRAME_CLASS from FCU, trying Q_FRAME_CLASS...")
+                            // Try QuadPlane parameter as fallback
+                            when (val qResult = parameterRepository.requestParameter(PARAM_Q_FRAME_CLASS)) {
+                                is ParameterRepository.ParameterResult.Success -> {
+                                    qFrameClassParam = qResult.parameter
+                                    Log.d(TAG, "✅ Got Q_FRAME_CLASS from FCU: ${qResult.parameter.value}")
+                                }
+                                else -> Log.w(TAG, "⚠️ Could not fetch Q_FRAME_CLASS either")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Error fetching FRAME_CLASS: ${e.message}")
+                }
+            }
+
+            if (frameTypeParam == null) {
+                Log.d(TAG, "🔍 FRAME_TYPE not in cache, requesting directly from FCU...")
+                try {
+                    when (val result = parameterRepository.requestParameter(PARAM_FRAME_TYPE)) {
+                        is ParameterRepository.ParameterResult.Success -> {
+                            frameTypeParam = result.parameter
+                            Log.d(TAG, "✅ Got FRAME_TYPE from FCU: ${result.parameter.value}")
+                        }
+                        else -> {
+                            Log.w(TAG, "⚠️ Could not fetch FRAME_TYPE from FCU, trying Q_FRAME_TYPE...")
+                            // Try QuadPlane parameter as fallback
+                            when (val qResult = parameterRepository.requestParameter(PARAM_Q_FRAME_TYPE)) {
+                                is ParameterRepository.ParameterResult.Success -> {
+                                    qFrameTypeParam = qResult.parameter
+                                    Log.d(TAG, "✅ Got Q_FRAME_TYPE from FCU: ${qResult.parameter.value}")
+                                }
+                                else -> Log.w(TAG, "⚠️ Could not fetch Q_FRAME_TYPE either")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Error fetching FRAME_TYPE: ${e.message}")
+                }
+            }
+
+            if (frameParam == null && frameClassParam == null && qFrameClassParam == null) {
+                // Try legacy FRAME parameter if CLASS_TYPE scheme not available
+                Log.d(TAG, "🔍 FRAME not in cache, requesting directly from FCU...")
+                try {
+                    when (val result = parameterRepository.requestParameter(PARAM_FRAME)) {
+                        is ParameterRepository.ParameterResult.Success -> {
+                            frameParam = result.parameter
+                            Log.d(TAG, "✅ Got FRAME from FCU: ${result.parameter.value}")
+                        }
+                        else -> Log.w(TAG, "⚠️ Could not fetch FRAME from FCU")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Error fetching FRAME: ${e.message}")
+                }
+            }
+
+            // Use QuadPlane parameters if regular ones not available
+            val effectiveFrameClassParam = frameClassParam ?: qFrameClassParam
+            val effectiveFrameTypeParam = frameTypeParam ?: qFrameTypeParam
 
             val hasFrame = frameParam != null
-            val hasFrameClass = frameClassParam != null
-            val hasFrameType = frameTypeParam != null
+            val hasFrameClass = effectiveFrameClassParam != null
+            val hasFrameType = effectiveFrameTypeParam != null
 
             Log.d(TAG, "Parameter detection: FRAME=$hasFrame, FRAME_CLASS=$hasFrameClass, FRAME_TYPE=$hasFrameType")
 
             val config = when {
                 // Prefer CLASS_TYPE scheme if both params present
                 hasFrameClass && hasFrameType -> {
-                    val frameClass = frameClassParam.value
-                    val frameType = frameTypeParam.value
+                    val frameClass = effectiveFrameClassParam!!.value
+                    val frameType = effectiveFrameTypeParam!!.value
                     val detectedFrame = ClassTypeFrameMapping.valuesToFrameType(frameClass, frameType)
 
                     Log.d(TAG, "✅ Detected CLASS_TYPE scheme: FRAME_CLASS=$frameClass, FRAME_TYPE=$frameType -> $detectedFrame")
@@ -161,7 +239,7 @@ class FrameTypeRepository(
                 }
                 // Use legacy FRAME parameter
                 hasFrame -> {
-                    val frameValue = frameParam.value
+                    val frameValue = frameParam!!.value
                     val detectedFrame = LegacyFrameMapping.valueToFrameType(frameValue)
 
                     Log.d(TAG, "✅ Detected LEGACY_FRAME scheme: FRAME=$frameValue -> $detectedFrame")
