@@ -156,25 +156,32 @@ class ServoRepository(
     private fun handleParamValue(message: ParamValue) {
         val paramId = message.paramId.trim('\u0000')
 
+        // Only process SERVO parameters
+        if (!paramId.startsWith("SERVO")) return
+
+        Log.d(TAG, "📥 Received PARAM_VALUE: $paramId = ${message.paramValue}")
+
         // Parse SERVOx_FUNCTION parameters
-        if (paramId.startsWith("SERVO") && paramId.endsWith("_FUNCTION")) {
+        if (paramId.endsWith("_FUNCTION")) {
             val channelMatch = Regex("SERVO(\\d+)_FUNCTION").find(paramId)
             channelMatch?.let {
                 val channelIndex = it.groupValues[1].toIntOrNull() ?: return
                 val functionValue = message.paramValue.toInt()
                 val servoFunction = ServoFunction.fromIndex(functionValue)
 
+                Log.d(TAG, "📝 Channel $channelIndex function = ${servoFunction.displayName} (value: $functionValue)")
                 updateChannelFunction(channelIndex, servoFunction)
             }
         }
 
         // Parse SERVOx_REVERSED parameters
-        if (paramId.startsWith("SERVO") && paramId.endsWith("_REVERSED")) {
+        if (paramId.endsWith("_REVERSED")) {
             val channelMatch = Regex("SERVO(\\d+)_REVERSED").find(paramId)
             channelMatch?.let {
                 val channelIndex = it.groupValues[1].toIntOrNull() ?: return
                 val reversed = message.paramValue.toInt() == 1
 
+                Log.d(TAG, "📝 Channel $channelIndex reverse = $reversed")
                 updateChannelReverse(channelIndex, reversed)
             }
         }
@@ -363,7 +370,7 @@ class ServoRepository(
     }
 
     /**
-     * Set a parameter value on the flight controller
+     * Set a parameter value on the flight controller with confirmation
      */
     suspend fun setParameter(paramId: String, value: Float): Result<Unit> {
         return try {
@@ -390,6 +397,16 @@ class ServoRepository(
             )
 
             Log.d(TAG, "✅ PARAM_SET sent successfully: $paramId = $value")
+
+            // Wait briefly for the FCU to process the parameter
+            kotlinx.coroutines.delay(100)
+
+            // Request the parameter back to confirm the change was applied
+            requestParameter(connection, paramId)
+
+            // Wait for the response to be processed
+            kotlinx.coroutines.delay(200)
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to set parameter $paramId = $value", e)
@@ -406,7 +423,19 @@ class ServoRepository(
         if (channelIndex !in 1..MAX_CHANNELS) {
             return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
         }
-        return setParameter("SERVO${channelIndex}_FUNCTION", function.toParameterValue().toFloat())
+
+        val paramValue = function.toParameterValue().toFloat()
+        Log.d(TAG, "📝 Setting SERVO${channelIndex}_FUNCTION to ${function.displayName} (value: $paramValue)")
+
+        val result = setParameter("SERVO${channelIndex}_FUNCTION", paramValue)
+
+        // Update local state optimistically if send succeeded
+        if (result.isSuccess) {
+            updateChannelFunction(channelIndex, function)
+            Log.d(TAG, "✅ Channel $channelIndex function updated to ${function.displayName}")
+        }
+
+        return result
     }
 
     /**
@@ -416,7 +445,16 @@ class ServoRepository(
         if (channelIndex !in 1..MAX_CHANNELS) {
             return Result.failure(IllegalArgumentException("Invalid channel: $channelIndex"))
         }
-        return setParameter("SERVO${channelIndex}_REVERSED", if (reversed) 1f else 0f)
+
+        val result = setParameter("SERVO${channelIndex}_REVERSED", if (reversed) 1f else 0f)
+
+        // Update local state optimistically if send succeeded
+        if (result.isSuccess) {
+            updateChannelReverse(channelIndex, reversed)
+            Log.d(TAG, "✅ Channel $channelIndex reverse updated to $reversed")
+        }
+
+        return result
     }
 
     /**
@@ -429,7 +467,12 @@ class ServoRepository(
         if (minPwm !in 800..2200) {
             return Result.failure(IllegalArgumentException("Invalid PWM: $minPwm"))
         }
-        return setParameter("SERVO${channelIndex}_MIN", minPwm.toFloat())
+        val result = setParameter("SERVO${channelIndex}_MIN", minPwm.toFloat())
+        if (result.isSuccess) {
+            updateChannelMin(channelIndex, minPwm)
+            Log.d(TAG, "✅ Channel $channelIndex min PWM updated to $minPwm")
+        }
+        return result
     }
 
     /**
@@ -442,7 +485,12 @@ class ServoRepository(
         if (trimPwm !in 800..2200) {
             return Result.failure(IllegalArgumentException("Invalid PWM: $trimPwm"))
         }
-        return setParameter("SERVO${channelIndex}_TRIM", trimPwm.toFloat())
+        val result = setParameter("SERVO${channelIndex}_TRIM", trimPwm.toFloat())
+        if (result.isSuccess) {
+            updateChannelTrim(channelIndex, trimPwm)
+            Log.d(TAG, "✅ Channel $channelIndex trim PWM updated to $trimPwm")
+        }
+        return result
     }
 
     /**
@@ -455,6 +503,11 @@ class ServoRepository(
         if (maxPwm !in 800..2200) {
             return Result.failure(IllegalArgumentException("Invalid PWM: $maxPwm"))
         }
-        return setParameter("SERVO${channelIndex}_MAX", maxPwm.toFloat())
+        val result = setParameter("SERVO${channelIndex}_MAX", maxPwm.toFloat())
+        if (result.isSuccess) {
+            updateChannelMax(channelIndex, maxPwm)
+            Log.d(TAG, "✅ Channel $channelIndex max PWM updated to $maxPwm")
+        }
+        return result
     }
 }
