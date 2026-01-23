@@ -10,7 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -87,43 +87,119 @@ fun ParametersScreen(
             topBar = {
                 Surface(
                     color = headerColor,
-                    shadowElevation = 4.dp
+                    shadowElevation = 2.dp
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "FULL PARAMETERS",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontStyle = FontStyle.Italic,
-                                color = Color.White,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                "${parameters.size} parameters loaded",
-                                fontSize = 11.sp,
-                                color = accentColor
-                            )
-                        }
-                        if (hasUnsavedChanges) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.2f)),
-                                shape = RoundedCornerShape(8.dp)
+                    Column {
+                        // Single compact row with back, title, search, and buttons
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Back button
+                            IconButton(
+                                onClick = onNavigateBack,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+
+                            // Title and count
+                            Column(
+                                modifier = Modifier.padding(end = 8.dp)
                             ) {
                                 Text(
-                                    "Unsaved",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    fontSize = 11.sp,
+                                    "FULL PARAMETERS",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontStyle = FontStyle.Italic,
+                                    color = Color.White,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    "${parameters.size} parameters loaded",
+                                    fontSize = 9.sp,
+                                    color = accentColor
+                                )
+                            }
+
+                            // Search field - takes available space
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.searchParameters(it) },
+                                placeholder = { Text("Search...", fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Search,
+                                        contentDescription = null,
+                                        tint = accentColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = accentColor,
+                                    unfocusedBorderColor = accentColor.copy(alpha = 0.5f),
+                                    cursorColor = accentColor,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Write button (if has unsaved changes)
+                            if (hasUnsavedChanges) {
+                                Button(
+                                    onClick = { viewModel.saveAllPendingEdits() },
+                                    modifier = Modifier.height(32.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                                    shape = RoundedCornerShape(6.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                ) {
+                                    Text("Write", fontSize = 11.sp)
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+
+                            // Refresh button
+                            Button(
+                                onClick = { viewModel.fetchParameters() },
+                                modifier = Modifier.height(32.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                enabled = loadingProgress !is LoadingProgress.Loading
+                            ) {
+                                Text("Refresh", fontSize = 11.sp, color = Color.Black)
+                            }
+                        }
+
+                        // Loading progress bar
+                        when (val progress = loadingProgress) {
+                            is LoadingProgress.Loading -> {
+                                LinearProgressIndicator(
+                                    progress = { if (progress.total > 0) progress.current.toFloat() / progress.total else 0f },
+                                    modifier = Modifier.fillMaxWidth().height(2.dp),
                                     color = accentColor,
-                                    fontWeight = FontWeight.Bold
+                                    trackColor = cardColor
+                                )
+                            }
+                            else -> {
+                                // Thin accent line as separator
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .background(accentColor)
                                 )
                             }
                         }
@@ -138,67 +214,27 @@ fun ParametersScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                // Compact toolbar with search and buttons
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardColor.copy(alpha = 0.9f)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    CompactToolbar(
-                        searchQuery = searchQuery,
-                        onSearchChange = { viewModel.searchParameters(it) },
-                        onRefresh = { viewModel.fetchParameters() },
-                        onSaveToFile = { /* Future: export to file */ },
-                        onLoadFromFile = { /* Future: import from file */ },
-                        onWriteParams = {
-                            if (hasUnsavedChanges) viewModel.saveAllPendingEdits()
-                        },
-                        onRefreshParams = { viewModel.fetchParameters() },
-                        onCompareParams = { /* Future: compare feature */ },
-                        hasUnsavedChanges = hasUnsavedChanges,
-                        paramCount = parameters.size,
-                        isLoading = loadingProgress is LoadingProgress.Loading,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Loading progress
-                when (val progress = loadingProgress) {
-                    is LoadingProgress.Loading -> {
-                        LinearProgressIndicator(
-                            progress = { if (progress.total > 0) progress.current.toFloat() / progress.total else 0f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp),
-                            color = accentColor,
-                            trackColor = cardColor
-                        )
-                    }
-                    else -> {}
-                }
 
                 // Table header
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                     colors = CardDefaults.cardColors(containerColor = cardColor),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Name", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.25f))
-                        Text("Value", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.15f))
-                        Text("Units", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.15f))
-                        Text("Description", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.4f))
-                        Spacer(modifier = Modifier.width(40.dp))
+                        Text("Name", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.25f))
+                        Text("Value", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.15f))
+                        Text("Units", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.15f))
+                        Text("Description", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = accentColor, modifier = Modifier.weight(0.4f))
+                        Spacer(modifier = Modifier.width(36.dp))
                     }
                 }
 
@@ -252,21 +288,21 @@ fun ParametersScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 12.dp),
-                        contentPadding = PaddingValues(vertical = 4.dp)
+                            .padding(horizontal = 8.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp)
                     ) {
                         items(items = parameters, key = { it.name }) { parameter ->
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
+                                    .padding(vertical = 1.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (pendingEdits.containsKey(parameter.name))
                                         accentColor.copy(alpha = 0.1f)
                                     else
                                         cardColor.copy(alpha = 0.7f)
                                 ),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(6.dp)
                             ) {
                                 CompactParameterRow(
                                     parameter = parameter,
