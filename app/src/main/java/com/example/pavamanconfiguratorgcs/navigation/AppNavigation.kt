@@ -20,12 +20,14 @@ import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersScreen
 import com.example.pavamanconfiguratorgcs.ui.fullparams.ParametersViewModel
 import com.example.pavamanconfiguratorgcs.ui.home.HomeScreen
 import com.example.pavamanconfiguratorgcs.ui.home.HomeViewModel
+import com.example.pavamanconfiguratorgcs.ui.welcome.WelcomeScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.FailsafeScreen
 import com.example.pavamanconfiguratorgcs.ui.configurations.BatteryMonitorScreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 
 sealed class Screen(val route: String) {
+    object Welcome : Screen("welcome")
     object Connection : Screen("connection")
     object Home : Screen("home")
     object Configurations : Screen("configurations")
@@ -78,9 +80,21 @@ fun AppNavigation(modifier: Modifier = Modifier) {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Connection.route,
+        startDestination = Screen.Welcome.route,
         modifier = modifier
     ) {
+        // Welcome/Splash screen
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onNavigateToConnection = {
+                    navController.navigate(Screen.Connection.route) {
+                        // Remove welcome screen from back stack
+                        popUpTo(Screen.Welcome.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Connection.route) {
             // Create ConnectionViewModel with the shared repository
             val connectionViewModel: ConnectionViewModel = viewModel(
