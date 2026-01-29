@@ -1,6 +1,8 @@
 package com.example.pavamanconfiguratorgcs.ui.configurations
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,11 +16,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.sin
+
+// Theme colors matching other calibration screens
+private val backgroundColor = Color(0xFF0A0E21)
+private val accentColor = Color(0xFF00D4AA)
+private val cardColor = Color(0xFF1C2541)
+private val waveColor = Color(0xFF1E3A5F)
+private val errorColor = Color(0xFFFF6B6B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,51 +45,61 @@ fun CompassCalibrationScreen(
     if (uiState.showCancelDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.showCancelDialog(false) },
-            title = { Text("Cancel Calibration?") },
-            text = { Text("Are you sure you want to cancel the compass calibration? All progress will be lost.") },
+            title = { Text("Cancel Calibration?", color = Color.White) },
+            text = { Text("Are you sure you want to cancel the compass calibration? All progress will be lost.", color = Color.White.copy(alpha = 0.8f)) },
+            containerColor = cardColor,
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         viewModel.cancelCalibration()
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = errorColor)
                 ) {
-                    Text("Yes, Cancel", color = MaterialTheme.colorScheme.error)
+                    Text("Yes, Cancel")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.showCancelDialog(false) }) {
-                    Text("Continue Calibration")
+                    Text("Continue Calibration", color = accentColor)
                 }
             }
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF535350))
+            .background(backgroundColor)
     ) {
-        // Header
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF535350))
-                .padding(16.dp)
+        // Wave background decoration
+        CompassWaveBackground(modifier = Modifier.fillMaxSize())
+
+        // Star decorations
+        CompassStarDecorations()
+
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            CompassCalibrationHeader(
-                onBackClick = {
-                    if (uiState.calibrationState is CompassCalibrationState.Idle ||
-                        uiState.calibrationState is CompassCalibrationState.Success ||
-                        uiState.calibrationState is CompassCalibrationState.Failed ||
-                        uiState.calibrationState is CompassCalibrationState.Cancelled
-                    ) {
-                        onNavigateBack()
-                    } else {
-                        viewModel.showCancelDialog(true)
+            // Header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                CompassCalibrationHeader(
+                    onBackClick = {
+                        if (uiState.calibrationState is CompassCalibrationState.Idle ||
+                            uiState.calibrationState is CompassCalibrationState.Success ||
+                            uiState.calibrationState is CompassCalibrationState.Failed ||
+                            uiState.calibrationState is CompassCalibrationState.Cancelled
+                        ) {
+                            onNavigateBack()
+                        } else {
+                            viewModel.showCancelDialog(true)
+                        }
                     }
-                }
-            )
-        }
+                )
+            }
 
         // Progress indicator
         Box(
@@ -114,7 +137,6 @@ fun CompassCalibrationScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF535350))
                 .padding(16.dp)
         ) {
             CompassCalibrationActions(
@@ -129,6 +151,7 @@ fun CompassCalibrationScreen(
         }
     }
 }
+}
 
 @Composable
 private fun CompassCalibrationHeader(onBackClick: () -> Unit) {
@@ -136,20 +159,37 @@ private fun CompassCalibrationHeader(onBackClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onBackClick) {
+        IconButton(
+            onClick = onBackClick,
+            modifier = Modifier
+                .background(
+                    color = cardColor,
+                    shape = RoundedCornerShape(12.dp)
+                )
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "Compass Calibration",
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold
-        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column {
+            Text(
+                text = "COMPASS",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "CALIBRATION",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = accentColor,
+                letterSpacing = 2.sp
+            )
+        }
     }
 }
 
@@ -178,12 +218,12 @@ private fun CompassCalibrationProgress(
                 .fillMaxWidth(0.8f)
                 .height(8.dp),
             color = when (calibrationState) {
-                is CompassCalibrationState.Success -> Color(0xFF4CAF50)
-                is CompassCalibrationState.Failed -> Color.Red
-                is CompassCalibrationState.InProgress -> Color(0xFF4CAF50)
+                is CompassCalibrationState.Success -> accentColor
+                is CompassCalibrationState.Failed -> errorColor
+                is CompassCalibrationState.InProgress -> accentColor
                 else -> Color.Gray
             },
-            trackColor = Color.Gray.copy(alpha = 0.3f)
+            trackColor = Color.White.copy(alpha = 0.1f)
         )
     }
 }
@@ -208,8 +248,9 @@ private fun CompassCalibrationContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 400.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF3A3A38)),
-            shape = RoundedCornerShape(16.dp)
+            colors = CardDefaults.cardColors(containerColor = cardColor),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, Color(0xFF2D3A5C))
         ) {
             Box(
                 modifier = Modifier
@@ -257,14 +298,16 @@ private fun IdleContent(isConnected: Boolean) {
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth()
     ) {
+        // Connection status indicator
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = if (isConnected) Color(0xFF1B5E20) else Color(0xFF5D4037)
+                containerColor = if (isConnected) Color(0xFF1B4D3E) else Color(0xFF4D2B1B)
             ),
-            shape = RoundedCornerShape(8.dp)
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, if (isConnected) accentColor.copy(alpha = 0.5f) else errorColor.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
@@ -276,7 +319,7 @@ private fun IdleContent(isConnected: Boolean) {
                 Icon(
                     imageVector = if (isConnected) Icons.Default.CheckCircle else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = if (isConnected) accentColor else errorColor,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -292,7 +335,7 @@ private fun IdleContent(isConnected: Boolean) {
         Icon(
             imageVector = Icons.Default.Explore,
             contentDescription = null,
-            tint = if (isConnected) Color(0xFF4CAF50) else Color.Gray,
+            tint = if (isConnected) accentColor else Color.Gray,
             modifier = Modifier.size(80.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -310,28 +353,31 @@ private fun IdleContent(isConnected: Boolean) {
             } else {
                 "Connect to drone to start"
             },
-            color = Color.White.copy(alpha = 0.7f),
+            color = Color.White.copy(alpha = 0.9f),
             fontSize = 14.sp,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Info card - Compact version
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A28)),
-            shape = RoundedCornerShape(8.dp)
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1529)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0xFF2D3A5C).copy(alpha = 0.5f))
         ) {
             Column(
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(12.dp)
             ) {
                 Text(
-                    text = "Calibration Instructions:",
-                    color = Color.White,
-                    fontSize = 16.sp,
+                    text = "📋 Calibration Instructions:",
+                    color = accentColor,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "1. Hold vehicle in the air\n" +
                             "2. Rotate slowly - point each side down\n" +
@@ -339,9 +385,9 @@ private fun IdleContent(isConnected: Boolean) {
                             "4. Wait for all compasses to complete\n" +
                             "5. Review and accept calibration\n" +
                             "6. Reboot autopilot after success",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
                 )
             }
         }
@@ -369,7 +415,7 @@ private fun StartingContent() {
         Icon(
             imageVector = Icons.Default.Explore,
             contentDescription = null,
-            tint = Color(0xFF4CAF50),
+            tint = accentColor,
             modifier = Modifier
                 .size(80.dp)
                 .rotate(angle)
@@ -419,7 +465,7 @@ private fun InProgressContent(
             Icon(
                 imageVector = Icons.Default.Explore,
                 contentDescription = null,
-                tint = Color(0xFF4CAF50),
+                tint = accentColor,
                 modifier = Modifier
                     .size(80.dp)
                     .rotate(angle)
@@ -437,7 +483,7 @@ private fun InProgressContent(
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF4CAF50),
+                tint = accentColor,
                 modifier = Modifier.size(80.dp)
             )
 
@@ -445,7 +491,7 @@ private fun InProgressContent(
 
             Text(
                 text = "Calibration Complete!",
-                color = Color(0xFF4CAF50),
+                color = accentColor,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -455,7 +501,7 @@ private fun InProgressContent(
 
         Text(
             text = instruction,
-            color = Color(0xFF4CAF50),
+            color = accentColor,
             fontSize = 16.sp,
             textAlign = TextAlign.Center,
             fontWeight = FontWeight.Medium
@@ -466,8 +512,9 @@ private fun InProgressContent(
         if (compassProgress.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A28)),
-                shape = RoundedCornerShape(8.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1529)),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF2D3A5C).copy(alpha = 0.5f))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp)
@@ -497,8 +544,8 @@ private fun InProgressContent(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(6.dp),
-                                color = Color(0xFF4CAF50),
-                                trackColor = Color.Gray.copy(alpha = 0.3f)
+                                color = accentColor,
+                                trackColor = Color.White.copy(alpha = 0.1f)
                             )
 
                             Text(
@@ -523,8 +570,9 @@ private fun InProgressContent(
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A28)),
-                shape = RoundedCornerShape(8.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1529)),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF2D3A5C).copy(alpha = 0.5f))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp)
@@ -670,8 +718,9 @@ private fun SuccessContent(message: String, compassReports: List<CompassReport>)
             Spacer(modifier = Modifier.height(16.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2A28)),
-                shape = RoundedCornerShape(8.dp)
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1529)),
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color(0xFF2D3A5C).copy(alpha = 0.5f))
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp)
@@ -698,8 +747,9 @@ private fun SuccessContent(message: String, compassReports: List<CompassReport>)
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF2A5E20)),
-            shape = RoundedCornerShape(8.dp)
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1B4D3E)),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f))
         ) {
             Row(
                 modifier = Modifier
@@ -837,18 +887,19 @@ private fun CompassCalibrationActions(
                     enabled = isConnected,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
+                        tint = if (isConnected) backgroundColor else Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Start", fontSize = 16.sp)
+                    Text("Start", fontSize = 16.sp, color = if (isConnected) backgroundColor else Color.White.copy(alpha = 0.5f))
                 }
 
                 Button(
@@ -856,18 +907,19 @@ private fun CompassCalibrationActions(
                     enabled = false,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Accept", fontSize = 16.sp)
+                    Text("Accept", fontSize = 16.sp, color = Color.White.copy(alpha = 0.5f))
                 }
 
                 Button(
@@ -875,18 +927,19 @@ private fun CompassCalibrationActions(
                     enabled = false,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = Color.Gray
+                        containerColor = errorColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Cancel,
                         contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Cancel", fontSize = 16.sp)
+                    Text("Cancel", fontSize = 16.sp, color = Color.White.copy(alpha = 0.5f))
                 }
             }
             is CompassCalibrationState.Starting,
@@ -896,18 +949,19 @@ private fun CompassCalibrationActions(
                     enabled = false,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Start", fontSize = 16.sp)
+                    Text("Start", fontSize = 16.sp, color = Color.White.copy(alpha = 0.5f))
                 }
 
                 Button(
@@ -915,18 +969,19 @@ private fun CompassCalibrationActions(
                     enabled = calibrationComplete,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
+                        tint = if (calibrationComplete) backgroundColor else Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Accept", fontSize = 16.sp)
+                    Text("Accept", fontSize = 16.sp, color = if (calibrationComplete) backgroundColor else Color.White.copy(alpha = 0.5f))
                 }
 
                 Button(
@@ -934,18 +989,19 @@ private fun CompassCalibrationActions(
                     enabled = true,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = Color.Gray
+                        containerColor = errorColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Cancel,
                         contentDescription = null,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Cancel", fontSize = 16.sp)
+                    Text("Cancel", fontSize = 16.sp, color = Color.White)
                 }
             }
             is CompassCalibrationState.Success,
@@ -956,18 +1012,19 @@ private fun CompassCalibrationActions(
                     enabled = true,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = null,
+                        tint = backgroundColor,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Start", fontSize = 16.sp)
+                    Text("Start", fontSize = 16.sp, color = backgroundColor)
                 }
 
                 Button(
@@ -975,8 +1032,8 @@ private fun CompassCalibrationActions(
                     enabled = false,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF4CAF50),
-                        disabledContainerColor = Color.Gray
+                        containerColor = accentColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -994,8 +1051,8 @@ private fun CompassCalibrationActions(
                     enabled = false,
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        disabledContainerColor = Color.Gray
+                        containerColor = errorColor,
+                        disabledContainerColor = Color(0xFF2D3A5C)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
@@ -1012,3 +1069,125 @@ private fun CompassCalibrationActions(
     }
 }
 
+/**
+ * Wave background decoration for Compass screen
+ */
+@Composable
+private fun CompassWaveBackground(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    val animatedOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "waveOffset"
+    )
+
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val waveHeight = height * 0.15f
+        val baseY = height * 0.7f
+
+        // Draw multiple wave lines
+        for (i in 0..5) {
+            val path = Path()
+            val offsetY = i * 12f
+            val alpha = (0.3f - i * 0.04f).coerceAtLeast(0.05f)
+
+            path.moveTo(0f, baseY + offsetY)
+
+            var x = 0f
+            while (x <= width) {
+                val y = baseY + offsetY + sin((x / width * 4 + animatedOffset / 60f + i * 0.5f).toDouble()).toFloat() * waveHeight * 0.3f
+                path.lineTo(x, y)
+                x += 5f
+            }
+
+            drawPath(
+                path = path,
+                color = waveColor.copy(alpha = alpha),
+                style = Stroke(width = 2f)
+            )
+        }
+    }
+}
+
+/**
+ * Star decorations for Compass screen
+ */
+@Composable
+private fun CompassStarDecorations() {
+    val infiniteTransition = rememberInfiniteTransition(label = "stars")
+    val starAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = EaseInOut),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "starAlpha"
+    )
+
+    // Star positions (relative to screen)
+    val starPositions = listOf(
+        Offset(0.15f, 0.35f),
+        Offset(0.45f, 0.22f),
+        Offset(0.85f, 0.28f),
+        Offset(0.25f, 0.75f),
+        Offset(0.55f, 0.68f),
+        Offset(0.78f, 0.55f)
+    )
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val starColor = Color.White
+
+        starPositions.forEachIndexed { index, pos ->
+            val x = size.width * pos.x
+            val y = size.height * pos.y
+            val alpha = if (index % 2 == 0) starAlpha else 1.3f - starAlpha
+
+            // Draw 4-point star
+            drawCompassStar(
+                center = Offset(x, y),
+                size = 8f,
+                color = starColor.copy(alpha = alpha.coerceIn(0.2f, 1f))
+            )
+        }
+    }
+}
+
+/**
+ * Draw a 4-point star
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawCompassStar(
+    center: Offset,
+    size: Float,
+    color: Color
+) {
+    val path = Path().apply {
+        // Vertical line
+        moveTo(center.x, center.y - size)
+        lineTo(center.x, center.y + size)
+
+        // Horizontal line
+        moveTo(center.x - size, center.y)
+        lineTo(center.x + size, center.y)
+
+        // Diagonal lines (smaller)
+        val smallSize = size * 0.5f
+        moveTo(center.x - smallSize, center.y - smallSize)
+        lineTo(center.x + smallSize, center.y + smallSize)
+
+        moveTo(center.x + smallSize, center.y - smallSize)
+        lineTo(center.x - smallSize, center.y + smallSize)
+    }
+
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(width = 1.5f)
+    )
+}
